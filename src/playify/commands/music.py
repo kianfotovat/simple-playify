@@ -1781,6 +1781,7 @@ async def radio_24_7(interaction: discord.Interaction, mode: str):
             return
 
         get_guild_state(guild_id)._24_7_mode = False
+        await save_all_states()
         music_player.autoplay_enabled = False
         music_player.loop_current = False
         music_player.radio_playlist.clear()
@@ -1846,6 +1847,7 @@ async def radio_24_7(interaction: discord.Interaction, mode: str):
         )
 
     get_guild_state(guild_id)._24_7_mode = True
+    await save_all_states()
     music_player.loop_current = False
 
     if mode == "auto":
