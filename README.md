@@ -1,167 +1,138 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/5c1d5fba-3a34-4ffe-bd46-ef68e1175360" alt="Playify Banner" width="900">
+  <img src="https://github.com/user-attachments/assets/5c1d5fba-3a34-4ffe-bd46-ef68e1175360" alt="Playify banner" width="900">
 </p>
 
-<h1 align="center">Playify V2</h1>
+# Playify 2.1
+
+This fork follows Playify V2's modular Python/TUI architecture while keeping the smaller, self-hosted product direction of the older fork. It is deliberately a personal bot: there is no hosted/public mode, web GUI, Docker image, app bundle, telemetry, or compatibility migration from older database/config layouts.
+
+## Fork comparison
+
+| Area | Upstream V2 | This fork |
+|---|---|---|
+| Interface | Rich TUI plus upstream setup flows | TUI only, portable `data/` and `bin/` layout |
+| Discord | Slash commands plus legacy/message-content behavior | Slash-only `discord.Client`; no privileged message-content intent |
+| Sources | Broad catalog and upload support | YouTube/Music, SoundCloud, Twitch, Bandcamp, Spotify, Deezer, Apple Music, Tidal, Amazon Music, and validated direct media URLs |
+| Playback | Queue, filters, lyrics/karaoke, uploads, 24/7, autoplay | Queue, dormant resume, autoplay, loop, history, seek, controller; no filters, lyrics, karaoke, uploads, or 24/7 mode |
+| State | Upstream V2 SQLite layout | Fresh async `data/playify.db`; Full or Settings-only persistence |
+| Operations | TUI updater/installer | Managed `.venv`, managed FFmpeg, structured supervision, and confirmation-based Git updates |
+| Documentation | Static documentation site | This README only |
+
+The current version is `2.1.0`. In the TUI and `/status`, Playify also displays the checked-out seven-character Git revision; a non-Git copy displays `unknown`.
 
 <p align="center">
-  <a href="https://github.com/alan7383/playify/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/alan7383/playify?style=for-the-badge&logo=github" alt="License">
-  </a>
-  <img src="https://img.shields.io/badge/python-3.9+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9+">
-  <img src="https://img.shields.io/badge/Discord-bot-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
-  <a href="https://alan7383.github.io/playify/">
-    <img src="https://img.shields.io/badge/Documentation-1B3A5C?style=for-the-badge" alt="Documentation">
-  </a>
+  <img src="assets/dashboard_preview.svg" alt="Playify TUI dashboard" width="900">
 </p>
 
-<p align="center">
-  <strong>A minimalist, self-hosted Discord music bot with a powerful TUI dashboard.</strong><br><br>
-  <a href="https://alan7383.github.io/playify/"><strong>Explore the official documentation »</strong></a>
-</p>
+## What it does
 
----
+- Streams with yt-dlp and FFmpeg without downloading or caching media.
+- Resolves complete Spotify, Deezer, Apple Music, Tidal, and Amazon Music collections, retaining successful items if a later page fails.
+- Keeps one player and one compact controller in the active Voice/Stage chat per server.
+- Supports ordered concurrent imports, stable queue occurrence IDs, unlimited history, loop, autoplay provenance, and resumable dormant sessions.
+- Restricts direct media to extension-bearing HTTP(S) links (`mp3`, `wav`, `ogg`, `m4a`, `mp4`, `webm`, `flac`) with DNS/redirect checks and an explicit private-network allowlist.
+- Writes rotating local logs with token, credential, and signed-query redaction.
+- Runs a responsive dashboard with runtime metrics, player state, a full log viewer, setup, settings, maintenance, restart, and update controls.
 
-### ~ v2 update
+## Requirements
 
-Playify has been completely rewritten to provide a seamless, robust, and beautiful experience directly from your terminal.
+- Windows 10/11 x64 or Linux x86-64
+- Python 3.12, 3.13, or 3.14
+- Git
+- A Discord bot token
 
-* **Interactive TUI dashboard**: Monitor resources, queue length, active players, and logs in real-time through a beautiful ASCII interface.
-* **Built-in auto-updater**: Keep your bot up to date directly from the dashboard. No `git pull` or manual downloads required.
-* **One-click installer**: Run the setup script and let Playify automatically install Python, download FFmpeg, and set up your `.env` configuration.
-* **In-app settings menu**: Configure your bot's Discord presence, default volumes, and UI customization without touching a text file.
+macOS and ARM builds are not currently promised. You do not need to enable privileged Discord intents.
 
-<p align="center">
-  <img src="assets/dashboard_preview.png" alt="Playify TUI Dashboard" width="900">
-</p>
+## Guided installation
 
----
+Clone this repository so the updater has a real Git checkout:
 
-### ~ what is this
+```text
+git clone https://github.com/kianfotovat/simple-playify.git
+cd simple-playify
+```
 
-Playify is an open-source Discord music bot built for simplicity. No web interface, no paywalls, no account needed - just slash commands and music.
+On Windows, double-click `start.bat` or run it from Command Prompt. If no supported Python is present, it can offer to install Python 3.14 with `winget`.
 
-It supports **YouTube, YouTube Music, SoundCloud, Twitch, Spotify, Deezer, Bandcamp, Apple Music, Tidal, Amazon Music, direct audio links, and local files**.
+On Linux:
 
-Type `/play <url or query>` and let it run.
+```bash
+chmod +x start.sh
+./start.sh
+```
 
----
+The shared bootstrap creates and validates `.venv`, installs the dependencies, and opens the TUI. The TUI then offers to install an x64 GPL FFmpeg build if neither `bin/ffmpeg` nor a functional `ffmpeg` on `PATH` is available. The configuration wizard verifies credentials when the relevant service is reachable and prints a complete, copyable Discord invite URL; it never opens a browser.
 
-### * features
+### Manual fallback
 
-<details open>
-<summary><b>~ sources & playback</b></summary>
+If a launcher cannot run, create the environment in the repository root and then start the TUI with that exact interpreter:
 
-* Play from **10+ sources**: YouTube, SoundCloud, Twitch, Spotify, Apple Music, etc.
-* **Direct audio links**: stream any public MP3, FLAC, WAV, or audio URL.
-* **Local file playback**: upload and play your own audio/video files directly.
-* **Autoplay** of similar tracks via YouTube Mix and SoundCloud Stations.
-* **Loop** and **shuffle** queue controls.
-* Audio **filters**: slowed, reverb, bass boost, nightcore, and more.
-</details>
+```text
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m src.tui
+```
 
-<details>
-<summary><b>> spotify support</b></summary>
+Linux equivalents:
 
-* Individual tracks.
-* Personal and public playlists.
-* Spotify-curated mixes (Release Radar, Your Mix) via SpotifyScraper, bypassing API limits.
-</details>
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m src.tui
+```
 
-<details>
-<summary><b>+ extras</b></summary>
+Copy `.env.example` to `.env` only if you prefer editing credentials manually. `DISCORD_TOKEN` is required; the Spotify ID and secret are optional but must be supplied as a pair.
 
-* **Lyrics** fetching and display for the current track.
-* **Karaoke mode** with synced lyrics.
-* **24/7 mode** to keep the bot in a channel permanently.
-* **Kawaii mode** - toggle cute kaomoji responses with `/kaomoji`.
-* **Interactive queue pages**, track removal menus, and a seek interface.
-</details>
+## Commands
 
----
+Playback:
 
-### > install
+- `/play query` — start fresh playback or append while active
+- `/playnext query` — place an entire resolved request next, preserving its source order
+- `/search query` — choose one result collaboratively
+- `/pause`, `/resume`, `/replay`, `/seek [timestamp]`
+- `/skip`, `/previous`, `/stop`, `/reconnect`
 
-*For the complete installation guide (including Docker configurations), please visit the [installation documentation](https://alan7383.github.io/playify/getting-started/installation/).*
+Queue and modes:
 
-<details open>
-<summary><b>[ windows - recommended ]</b></summary>
+- `/queue`, `/remove`, `/jumpto`, `/clearqueue`, `/shuffle`
+- `/loop`, `/autoplay [query]`, `/volume value`
 
-1. Download the repository as a ZIP and extract it, or clone it via git.
-2. Double-click `start.bat`.
-3. The Playify installer will automatically install Python, download FFmpeg, and prompt you for your Discord token.
-4. The TUI dashboard will launch automatically.
-</details>
+Read-only:
 
-<details>
-<summary><b>[ linux ]</b></summary>
+- `/nowplaying`
+- `/status`
 
-Playify natively supports Linux with an automated setup script.
+Server setup (requires Manage Server; administrators qualify):
 
-1. Clone the repository: `git clone https://github.com/alan7383/playify.git`
-2. Enter the directory: `cd playify`
-3. Run the bootstrapper: `bash start.sh`
-4. The script will set up your virtual environment, automatically download a local copy of FFmpeg, and launch the dashboard.
-</details>
+- `/setup allowlist set channel1 … channel5`
+- `/setup allowlist add channel1 … channel5`
+- `/setup allowlist remove channel1 … channel5`
+- `/setup allowlist clear`
+- `/setup allowlist show`
+- `/setup channelmove show`
+- `/setup channelmove set mode`
 
----
+An empty allowlist means unrestricted accessible channels. Music-changing commands belong in the text chat attached to a Voice or Stage channel; `/queue`, `/nowplaying`, `/status`, and setup can also be used in allowed text channels. Users need access to the active channel chat but do not have to be connected to voice. Starting or moving playback still requires at least one human in the target voice channel.
 
-### # commands
+## Sources and credentials
 
-*For a detailed explanation of each feature, check out the [commands reference](https://alan7383.github.io/playify/playback-and-features/commands-reference/).*
+Spotify uses the official API first when `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are present, then falls back to the HTTP-only `spotifyscraper` path. Deezer, Apple Music, Tidal, and Amazon Music metadata use bounded shared HTTP requests; playback is resolved through YouTube first, with the configured SoundCloud fallback where applicable.
 
-| Command | Description |
-| :--- | :--- |
-| `/play <url/query>` | Add a song or playlist. Supports direct audio links. |
-| `/search <query>` | Search and choose from the top results. |
-| `/play-files <file(s)>` | Play one or more uploaded audio/video files. |
-| `/queue` | Show the queue with interactive pages. |
-| `/lyrics` | Fetch and display lyrics for the current song. |
-| `/karaoke` | Start a karaoke session with synced lyrics. |
-| `/24_7 <mode>` | Keep the bot in the channel 24/7, even when idle (`normal`, `auto`, `off`). |
-| `/defaultvolume <level>` | Set the volume the bot starts at when it joins (saved per server). |
-| `/reconnect` | Refresh the voice connection without losing your place. |
+For YouTube cookies, place any Netscape-format `.txt` cookie files in `data/cookies/`. Playify tries anonymously first and only scans those files for a targeted retry. Cookie files, logs, settings, installation metadata, temporary files, and the database are ignored by Git.
 
-*(And many more...)*
+Private direct-media destinations are blocked by default. Add only specific trusted hosts, IP addresses, or CIDRs through the `private_media_allowlist` setting. Loopback and cloud metadata addresses remain blocked even when listed.
 
----
+## TUI and persistence
 
-### @ troubleshooting
+Dashboard hotkeys are `L` logs, `C` config, `S` settings, `U` update, `M` maintenance, `R` restart, and `Q` quit. Config, settings, update inspection, and maintenance screens do not stop the bot. Restart and quit require confirmation; Playify requests a graceful stop for 15 seconds before offering force, wait, or cancel.
 
-* **FFmpeg not found** - The Windows `start.bat` handles this automatically. For manual setups, ensure FFmpeg 6.1.1 is in your PATH or `bin/` folder.
-* **Spotify errors** - check your `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in `.env`.
-* **Bot offline or unresponsive** - verify your `DISCORD_TOKEN` and bot permissions in the Developer portal.
+Full persistence is the default. Settings-only mode keeps the server allowlist and channel-move policy but purges player state on the next start. Changing from Full to Settings-only intentionally does not migrate old state. Older root-level `config.json` and `playify_state.db` files are never read or migrated.
 
-> **Need more help? Check out my detailed [FAQ & troubleshooting guide](https://alan7383.github.io/playify/troubleshooting/faq/).**
+## Local data disclosure
 
----
+Playify is self-hosted. Discord supplies command, server, channel, member, and voice-state data needed to run the bot. Playify stores the selected server policy and, in Full mode, queue/playback state in local SQLite. Credentials remain in local `.env`; media is streamed from third-party services; operational logs stay under `data/logs/`. There is no telemetry service or hosted Playify database.
 
-### + under the hood
+## License and origin
 
-* **Python** & **discord.py**
-* **yt-dlp** & **FFmpeg**
-* **Rich** (TUI dashboard)
-* **aiohttp** & **SpotifyScraper**
-
----
-
-### * contributing
-
-Bugs, features, pull requests - all welcome.
-
-* **Found a bug?** Open an issue.
-* **Want a feature?** Fork the repo and open a pull request.
-* **Like the project?** Star the repository!
-
----
-
-### ~ privacy & license
-
-* **Self-hosted only**: all logs stay local to your machine. No telemetry is sent anywhere.
-* MIT License - do what you want with the code, just be kind.
-
----
-
-<p align="center">
-  made with love by <a href="https://github.com/alan7383">alan7383</a>
-</p>
+Released under the unchanged [MIT License](LICENSE). Playify was originally created by [alan7383](https://github.com/alan7383/playify).

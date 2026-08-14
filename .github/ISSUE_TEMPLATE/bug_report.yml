@@ -1,78 +1,110 @@
-# .github/ISSUE_TEMPLATE/bug_report.yml
-
-name: "🐛 Bug Report"
-description: "Report a bug to help improve Playify."
-title: "[BUG] - "
-labels: ["bug", "triage"]
+name: Bug report
+description: Report a reproducible problem in this Playify fork
+title: "[Bug] "
+labels: [bug]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for taking the time to fill out this bug report!
-        Detailed information will help us resolve the issue faster.
-
   - type: dropdown
-    id: command
+    id: subsystem
     attributes:
-      label: "Which command caused the bug?"
-      description: "Select the command you were using when the issue occurred."
+      label: Subsystem
+      description: Which part of Playify was involved?
       options:
-        - /play
-        - /playnext
-        - /lyrics
-        - /karaoke
-        - /filter
-        - /stop
-        - /skip
-        - /queue
-        - Other command
+        - Playback or voice
+        - Queue or autoplay
+        - Source or catalog resolution
+        - Discord commands or controller
+        - TUI or launcher
+        - Configuration or persistence
+        - Updater or maintenance
+        - Unsure
     validations:
       required: true
 
   - type: input
-    id: query
+    id: command
     attributes:
-      label: "Link or Query Used"
-      description: "Paste the exact link (YouTube, Spotify, etc.) or search query you used. This is crucial for reproducing the bug!"
-      placeholder: "Ex: https://www.youtube.com/watch?v=... or 'Daft Punk - Around the World'"
+      label: Exact command
+      description: Optional. Include its arguments, but remove tokens, cookies, signed URL queries, and other secrets.
+      placeholder: /play query:…
+
+  - type: input
+    id: input
+    attributes:
+      label: Sanitized link or query
+      description: Optional. Remove credentials and private/signed query parameters before posting.
+      placeholder: https://example.test/path or an ordinary search phrase
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Playify with start.bat or start.sh
+        2. …
     validations:
       required: true
 
   - type: textarea
-    id: description
+    id: actual
     attributes:
-      label: "Bug Description"
-      description: "Please provide a clear and concise description of what happened. What did you expect to happen? What happened instead?"
-      placeholder: "I used the /play command with a Spotify link, the bot failed to add any songs and displayed an error..."
+      label: Actual result
+      description: What happened?
     validations:
       required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: input
+    id: incident
+    attributes:
+      label: Incident ID
+      description: Optional. Copy the short incident ID shown by Discord.
 
   - type: textarea
     id: logs
     attributes:
-      label: "📋 Bot Error Logs"
-      description: |
-        If the bot displayed an error message with a code block, please copy and paste it here.
-        This is the most important piece of information!
-      placeholder: |
-        ```
-        [youtube] ...: Video unavailable
-        ...
-        ```
-      render: shell
+      label: Sanitized local log excerpt
+      description: Optional. Remove tokens, cookies, credentials, private URLs, and personal data.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Playify version
+      description: Copy the complete version shown by /status or the TUI, including the short Git revision.
+      placeholder: 2.1.0 (abc1234)
     validations:
       required: true
 
-  - type: textarea
-    id: status
+  - type: dropdown
+    id: operating_system
     attributes:
-      label: "⚙️ Output of the /status command (very helpful!)"
-      description: "Please run the `/status` command in your server and paste the result here. This gives us valuable information about the bot's version and its environment."
-      placeholder: "Copy and paste the embed from the /status command here."
-      render: shell
+      label: Operating system
+      options:
+        - Windows 10/11 x64
+        - Linux x86-64
+        - Unsupported system
     validations:
-      required: false
+      required: true
 
-  - type: markdown
+  - type: input
+    id: python
     attributes:
-      value: "Thanks for helping make Playify better! ✨"
+      label: Python version
+      placeholder: 3.14.1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: latest
+    attributes:
+      label: Version check
+      options:
+        - label: I checked whether a newer Playify commit is available.
+          required: false
