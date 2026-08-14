@@ -1,10 +1,15 @@
 .env
+.venv/
+bin/
+data/
 logs/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 .DS_Store
-.venv/
-ffmpeg.exe
-data/
+
+# Old local layouts are deliberately not migrated.
+/app/
+/config.json
+/playify_state.db
+/cookies*.txt
+/ffmpeg.exe

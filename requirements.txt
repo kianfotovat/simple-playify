@@ -1,21 +1,9 @@
-# Core Discord library and voice dependency
-discord.py
-PyNaCl
-davey
-
-# Audio/Video downloading
+discord.py[voice]
 yt-dlp
-
-# Music platform APIs and scrapers
 spotipy
-spotifyscraper[all]==3.7.0
-PyYAML
-requests
-syncedlyrics
-lyricsgenius
-python-dotenv  # <-- NEW
-
-# Utilities
+spotifyscraper
+aiohttp
+python-dotenv
 cachetools
 psutil
 rich
