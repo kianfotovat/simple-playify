@@ -1,5 +1,11 @@
 """Playify TUI — Main entry point (python -m src.tui)."""
 
+if __name__ == "__main__":
+    from .main_v2 import main as _run_v2
+
+    _run_v2()
+    raise SystemExit
+
 import sys
 import os
 import time
