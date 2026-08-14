@@ -1,58 +1,13 @@
 #!/usr/bin/env bash
-# Playify V2 - Universal Linux Startup Script
-
-set -e
-
-# Colors
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
+set -euo pipefail
 cd "$(dirname "$0")"
-ROOT=$(pwd)
 
-# 1. Check for Python 3
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}[!] Python 3 is not installed.${NC}"
-    echo "Please install it using your package manager:"
-    echo "  Ubuntu/Debian: sudo apt install python3 python3-venv"
-    echo "  Fedora: sudo dnf install python3"
-    echo "  Arch: sudo pacman -S python"
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "Playify requires Python 3.12-3.14 x64. Install it with your package manager." >&2
     exit 1
 fi
-
-# 2. Check Python Version (needs 3.9+)
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' || {
-    echo -e "${RED}[!] Playify requires Python 3.9 or newer.${NC}"
+python3 -c 'import platform,sys; raise SystemExit(0 if sys.version_info[:2] in {(3,12),(3,13),(3,14)} and platform.machine().lower() in {"x86_64","amd64"} else 1)' || {
+    echo "Playify requires Python 3.12-3.14 on x86-64." >&2
     exit 1
 }
-
-# 3. Create Virtual Environment
-VENV_PATH="$ROOT/.venv"
-if [ ! -d "$VENV_PATH" ]; then
-    echo -e "${YELLOW}Creating Python virtual environment...${NC}"
-    # Check if venv module is installed (Ubuntu/Debian split it)
-    if ! python3 -m venv "$VENV_PATH" &> /dev/null; then
-        echo -e "${RED}[!] Failed to create virtual environment.${NC}"
-        echo "On Ubuntu/Debian, you may need to install the venv package:"
-        echo "  sudo apt install python3-venv"
-        exit 1
-    fi
-fi
-
-# 4. Activate Venv and Install Dependencies
-source "$VENV_PATH/bin/activate"
-
-# Désactiver l'avertissement de mise à jour de pip
-export PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Installation silencieuse des dépendances
-pip install -r requirements.txt -q
-# 5. FFmpeg will be handled by the Python TUI directly (downloaded to bin/)
-
-# 6. Launch TUI
-# Nettoie le terminal pour afficher directement l'interface
-clear
-exec python3 -m src.tui
+exec python3 bootstrap.py
