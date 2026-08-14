@@ -15,6 +15,7 @@ from src.playify.logging_utils import configure_logging
 
 from .bot_process_v2 import BotProcess
 from .dashboard_v2 import run_dashboard
+from .key_input import wait_for_key
 from .maintenance import locate_ffmpeg, managed_ffmpeg_due, install_ffmpeg, run_maintenance
 from .settings_v2 import run_settings
 from .theme import PLAYIFY_THEME
@@ -23,10 +24,13 @@ from .wizard_v2 import load_env, run_wizard
 
 def _console() -> Console:
     mode = Config.get("color_mode", "auto")
+    color_system = "standard" if mode == "ansi" else "truecolor" if mode == "v2" else None
     return Console(
         theme=PLAYIFY_THEME,
         highlight=False,
         no_color=mode == "none",
+        color_system=color_system,
+        safe_box=Config.get("symbol_mode", "auto") == "ascii",
         force_terminal=False if mode == "none" else None,
     )
 
@@ -113,7 +117,7 @@ def main() -> None:
     startup = _start_bot(console, bot)
     if startup not in {"online", "timeout"}:
         console.print(Panel("\n".join(bot.recent_logs(20)) or "No bot output.", title="Bot failed to start"))
-        console.input("Press Enter to continue to the offline dashboard…")
+        wait_for_key(console, "Press any key or Esc to continue to the offline dashboard…")
 
     try:
         while True:
@@ -122,21 +126,21 @@ def main() -> None:
                 if run_wizard(console, PROJECT_ROOT):
                     bot.metrics["restart_required"] = "Bot"
             elif action == "settings":
-                if run_settings(console):
-                    bot.metrics["restart_required"] = "Bot"
+                if restart := run_settings(console):
+                    bot.metrics["restart_required"] = restart
             elif action == "maintenance":
                 bot_restart, launcher_restart = run_maintenance(console)
                 if launcher_restart:
                     bot.metrics["restart_required"] = "Launcher"
                 elif bot_restart:
                     bot.metrics["restart_required"] = "Bot"
-                console.input("Press Enter or Esc to return…")
+                wait_for_key(console)
             elif action == "update":
                 try:
                     from .updater_v2 import choose_update, inspect_update, install_update
                 except ImportError:
                     console.print("[warning]The updater install path is awaiting explicit safety approval.[/]")
-                    console.input("Press Enter or Esc to return…")
+                    wait_for_key(console)
                     continue
                 status = inspect_update(PROJECT_ROOT, manual=True)
                 if choose_update(console, status) == "install":
@@ -146,7 +150,7 @@ def main() -> None:
                     console.print(
                         f"[{'success' if success else 'error'}]{'Updated to' if success else 'Update failed:'} {detail}[/]"
                     )
-                    console.input("Press any key or Esc to restart the launcher…")
+                    wait_for_key(console, "Press any key or Esc to restart the launcher…")
                     raise SystemExit(0 if success else 1)
             elif action == "restart":
                 if not Confirm.ask("Restart the bot now?", default=False):
@@ -157,7 +161,7 @@ def main() -> None:
                 startup = _start_bot(console, bot)
                 if startup != "online":
                     console.print("[error]The bot did not come online. It will remain stopped.[/]")
-                    console.input("Press Enter or Esc to return…")
+                    wait_for_key(console)
             elif action == "quit":
                 if not Confirm.ask("Quit Playify?", default=False):
                     continue

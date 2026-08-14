@@ -26,6 +26,7 @@ BROWSER_USER_AGENT = (
     "Chrome/131.0.0.0 Safari/537.36"
 )
 TRANSIENT_STATUS = {408, 425, 429, 500, 502, 503, 504}
+MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 NEVER_ALLOWED = {
     ipaddress.ip_address("169.254.169.254"),
     ipaddress.ip_address("169.254.170.2"),
@@ -230,7 +231,13 @@ class HttpClient:
                             json=json_data,
                             allow_redirects=False,
                         ) as response:
-                            body = await response.read()
+                            body = await response.content.read(MAX_RESPONSE_BYTES + 1)
+                            if len(body) > MAX_RESPONSE_BYTES:
+                                raise HttpStatusError(
+                                    response.status,
+                                    str(response.url),
+                                    "response exceeded 16 MiB",
+                                )
                             response_headers = {key: value for key, value in response.headers.items()}
                             status = response.status
                             final_url = str(response.url)

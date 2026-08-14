@@ -66,6 +66,7 @@ class PlayerSession:
         self.autoplay_task: asyncio.Task[None] | None = None
         self.voice_recovery_task: asyncio.Task[None] | None = None
         self._stream_retry_ids: set[str] = set()
+        self.expected_disconnect_until = 0.0
 
     @property
     def guild_id(self) -> int:
@@ -138,7 +139,9 @@ class PlayerSession:
                     pending.query, requested_by=pending.requested_by
                 )
             )
-        except BaseException as exc:
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
             result = exc
         async with self.lock:
             self.pending_results[pending.import_id] = result
@@ -185,10 +188,11 @@ class PlayerSession:
 
     def _finish_import(self, import_id: str, count: int, error: str | None) -> None:
         outcome = (count, error)
-        self.import_outcomes[import_id] = outcome
         waiter = self.import_waiters.pop(import_id, None)
-        if waiter and not waiter.done():
-            waiter.set_result(outcome)
+        if waiter:
+            self.import_outcomes[import_id] = outcome
+            if not waiter.done():
+                waiter.set_result(outcome)
 
     async def wait_import(self, pending: PendingImport) -> tuple[int, str | None]:
         outcome = self.import_outcomes.pop(pending.import_id, None)
@@ -232,14 +236,23 @@ class PlayerSession:
             self.voice = await channel.connect(reconnect=True, timeout=30, self_deaf=True)
         self.state.voice_channel_id = channel.id
         self.state.text_channel_id = text_channel_id
-        self.state.dormant = not resume
-        if not resume:
-            self.state.paused = True
+        self.state.dormant = False
         await self.changed("voice_connected")
         if resume and self.state.current:
             await self._play_current(self.state.position)
         elif resume and self.state.queue:
             await self._advance(force=True)
+        elif not resume and self.state.current:
+            await self._play_current(self.state.position)
+            if self.voice:
+                self.voice.pause()
+            self.state.paused = True
+            self.state.position = self.start_offset
+            self.playback_started_at = None
+            await self.changed("reconnected_paused")
+        elif not resume:
+            self.state.paused = True
+            await self.changed("reconnected_paused")
 
     async def move_to(
         self, channel: discord.VoiceChannel | discord.StageChannel, text_channel_id: int
@@ -258,6 +271,7 @@ class PlayerSession:
             if self.voice.source:
                 self.voice.stop()
             try:
+                self.expected_disconnect_until = time.monotonic() + 10
                 await self.voice.disconnect(force=True)
             except Exception:
                 LOGGER.exception("Voice disconnect failed for guild %s", self.guild_id)
@@ -400,15 +414,20 @@ class PlayerSession:
             await self.changed("resumed")
             return True
 
-    async def seek(self, position: float) -> float:
+    async def seek(self, position: float, *, clamp: bool = True) -> float:
         async with self.lock:
             current = self.state.current
             if current is None:
                 raise ValueError("nothing is playing")
             if current.is_live:
                 raise ValueError("live streams cannot be seeked")
-            upper = current.duration if current.duration is not None else position
-            position = max(0.0, min(float(position), upper))
+            position = float(position)
+            if not clamp and (
+                position < 0 or (current.duration is not None and position > current.duration)
+            ):
+                raise ValueError("timestamp is outside the current track")
+            upper = current.duration if current.duration is not None else max(0.0, position)
+            position = max(0.0, min(position, upper))
             self.state.position = position
             if self.active:
                 was_paused = self.state.paused
@@ -461,6 +480,7 @@ class PlayerSession:
             if self.voice:
                 if self.voice.is_playing() or self.voice.is_paused():
                     self.voice.stop()
+                self.expected_disconnect_until = time.monotonic() + 10
                 await self.voice.disconnect(force=True)
             self.voice = None
             controller = (self.state.controller_channel_id, self.state.controller_message_id)
@@ -549,6 +569,11 @@ class PlayerSession:
         if self.autoplay_task and not self.autoplay_task.done():
             return
         seed = seed or self.state.current
+        if seed and seed.source == "direct":
+            seed = next(
+                (track for track in reversed(self.state.history) if track.source != "direct"),
+                seed,
+            )
         if seed is None or not self.state.autoplay_enabled:
             return
 
@@ -599,6 +624,11 @@ class PlayerSession:
                 await asyncio.sleep(delay + random.random())
                 channel = self.bot.get_channel(self.state.voice_channel_id or 0)
                 if isinstance(channel, (discord.VoiceChannel, discord.StageChannel)):
+                    member = channel.guild.me
+                    permissions = channel.permissions_for(member) if member else None
+                    if not permissions or not permissions.connect or not permissions.speak:
+                        delay = min(15.0, delay * 2)
+                        continue
                     try:
                         await self.connect(channel, self.state.text_channel_id or channel.id)
                         return
@@ -674,11 +704,27 @@ class PlayerManager:
         for session in self.sessions.values():
             try:
                 session.state.position = session.position
+                session.state.paused = True
+                session.state.dormant = True
+                session.playback_started_at = None
+                tasks = [
+                    *session.pending_tasks.values(),
+                    session.idle_task,
+                    session.autoplay_task,
+                    session.voice_recovery_task,
+                ]
+                active_tasks = [task for task in tasks if task and not task.done()]
+                for task in active_tasks:
+                    task.cancel()
                 await session.changed("shutdown")
                 if session.voice:
                     session._playback_generation += 1
                     if session.voice.is_playing() or session.voice.is_paused():
                         session.voice.stop()
+                    session.expected_disconnect_until = time.monotonic() + 10
                     await session.voice.disconnect(force=True)
+                    session.voice = None
+                if active_tasks:
+                    await asyncio.gather(*active_tasks, return_exceptions=True)
             except Exception:
                 LOGGER.exception("Could not close player %s", session.guild_id)

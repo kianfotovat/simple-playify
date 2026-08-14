@@ -30,7 +30,7 @@ def _redact_url(match: re.Match[str]) -> str:
     try:
         parts = urlsplit(raw)
         hostname = parts.hostname or ""
-        netloc = hostname
+        netloc = f"[{hostname}]" if ":" in hostname else hostname
         if parts.port:
             netloc += f":{parts.port}"
         safe = urlunsplit((parts.scheme, netloc, parts.path, "", ""))

@@ -19,6 +19,7 @@ from .config import Config
 from .constants import PROJECT_ROOT, display_version
 from .discord_utils import Responses
 from .logging_utils import configure_logging
+from .messages import message
 from .models import ServerSettings
 from .services.extractor import Extractor
 from .services.http_client import HttpClient
@@ -173,7 +174,7 @@ class PlayifyClient(discord.Client):
         if isinstance(original, (discord.NotFound, app_commands.CheckFailure)):
             if not interaction.response.is_done():
                 await self.responses.send(
-                    interaction, "That interaction expired or is no longer valid.", lifetime="error"
+                    interaction, message("command.expired"), lifetime="error"
                 )
             return
         await self.responses.unexpected(interaction, original)
@@ -187,12 +188,26 @@ class PlayifyClient(discord.Client):
         before: discord.VoiceState,
         after: discord.VoiceState,
     ) -> None:
-        if not self.user or member.id != self.user.id:
+        if not self.user:
             return
         session = self.players.sessions.get(member.guild.id)
         if session is None:
             return
+        if member.id != self.user.id:
+            active_channel = session.voice.channel if session.voice else None
+            if (
+                isinstance(active_channel, (discord.VoiceChannel, discord.StageChannel))
+                and before.channel is not None
+                and before.channel.id == active_channel.id
+                and (after.channel is None or after.channel.id != active_channel.id)
+                and _human_count(active_channel) == 0
+            ):
+                await session.become_dormant("external_empty_move")
+            return
         if after.channel is None:
+            if time.monotonic() <= session.expected_disconnect_until:
+                session.expected_disconnect_until = 0.0
+                return
             await session.become_dormant("external_kick")
             return
         if before.channel and before.channel.id != after.channel.id:
@@ -222,8 +237,8 @@ class PlayifyClient(discord.Client):
         self._closing = True
         if self.heartbeat_task:
             self.heartbeat_task.cancel()
-        await self.controllers.shutdown()
         await self.players.shutdown()
+        await self.controllers.shutdown()
         await self.responses.close()
         await self.extractor.close()
         await self.http.close()

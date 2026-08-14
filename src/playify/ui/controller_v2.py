@@ -10,8 +10,9 @@ import discord
 
 from ..config import Config
 from ..discord_utils import Responses, format_time, safe_text
+from ..messages import message
 from ..services.extractor import public_canonical_link
-from ..services.player import PlayerManager, PlayerSession
+from ..services.player import PlayerManager, PlayerSession, _human_count
 from ..storage import Storage
 from .views import QueueView
 
@@ -27,17 +28,25 @@ class AddTrackModal(discord.ui.Modal, title="Add a track"):
         self.responses = responses
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        progress = await self.responses.progress(interaction, "Resolving your request…")
+        channel = self.session.voice.channel if self.session.voice else None
+        if not isinstance(channel, (discord.VoiceChannel, discord.StageChannel)) or _human_count(channel) == 0:
+            await self.responses.send(
+                interaction,
+                message("voice.empty"),
+                lifetime="error",
+            )
+            return
+        progress = await self.responses.progress(interaction, message("progress.resolving"))
         pending = await self.session.enqueue(
             str(self.query), requested_by=interaction.user.id, priority=False
         )
         count, error = await self.session.wait_import(pending)
         if count:
-            suffix = f" ({error})" if error else ""
-            await self.responses.finish_progress(progress, f"Added {count} track(s){suffix}.")
+            key = "player.import_partial_public" if error else "player.import_complete"
+            await self.responses.finish_progress(progress, message(key, count=count))
         else:
             await self.responses.finish_progress(
-                progress, "No playable tracks were found.", failed=True
+                progress, message("player.not_found"), failed=True
             )
 
 
@@ -54,7 +63,7 @@ class ControllerView(discord.ui.View):
         current = self.session.state.controller_message_id
         if interaction.message is None or interaction.message.id != current:
             await self.manager.responses.send(
-                interaction, "That controller is stale.", lifetime="error"
+                interaction, message("controller.stale"), lifetime="error"
             )
             return False
         return True
@@ -76,17 +85,19 @@ class ControllerView(discord.ui.View):
             track = await self.session.previous()
             await self.manager.responses.send(
                 interaction,
-                f"Playing **{safe_text(track.title)}**." if track else "History is empty.",
+                message("player.playing", title=safe_text(track.title))
+                if track
+                else message("player.history_empty"),
                 lifetime="success" if track else "error",
             )
 
         async def pause_resume(interaction: discord.Interaction) -> None:
             if self.session.state.paused:
                 changed = await self.session.resume()
-                text = "Playback resumed." if changed else "Playback is dormant."
+                text = message("player.resumed", title=safe_text(self.session.state.current.title)) if changed and self.session.state.current else message("voice.dormant")
             else:
                 changed = await self.session.pause()
-                text = "Playback paused." if changed else "Nothing is playing."
+                text = message("player.paused", title=safe_text(self.session.state.current.title)) if changed and self.session.state.current else message("player.nothing_playing")
             await self.manager.responses.send(
                 interaction, text, lifetime="success" if changed else "error"
             )
@@ -95,38 +106,46 @@ class ControllerView(discord.ui.View):
             track = await self.session.skip()
             await self.manager.responses.send(
                 interaction,
-                f"Playing **{safe_text(track.title)}**." if track else "The queue is empty.",
+                message("player.playing", title=safe_text(track.title))
+                if track
+                else message("player.queue_empty"),
             )
 
         async def stop(interaction: discord.Interaction) -> None:
             await self.session.stop()
-            await self.manager.responses.send(interaction, "Stopped playback and cleared the session.")
+            await self.manager.responses.send(interaction, message("player.stopped"))
 
         async def add(interaction: discord.Interaction) -> None:
             await interaction.response.send_modal(AddTrackModal(self.session, self.manager.responses))
 
         async def shuffle(interaction: discord.Interaction) -> None:
             count = await self.session.shuffle()
-            await self.manager.responses.send(interaction, f"Shuffled {count} queued tracks.")
+            await self.manager.responses.send(interaction, message("player.shuffle", count=count))
 
         async def loop(interaction: discord.Interaction) -> None:
             try:
                 enabled = await self.session.toggle_loop()
-                await self.manager.responses.send(interaction, f"Loop is {'on' if enabled else 'off'}.")
+                await self.manager.responses.send(
+                    interaction, message("player.loop", state="on" if enabled else "off")
+                )
             except ValueError:
-                await self.manager.responses.send(interaction, "Nothing is playing.", lifetime="error")
+                await self.manager.responses.send(
+                    interaction, message("player.nothing_playing"), lifetime="error"
+                )
 
         async def autoplay(interaction: discord.Interaction) -> None:
             enabled = await self.session.set_autoplay(not self.session.state.autoplay_enabled)
-            await self.manager.responses.send(interaction, f"Autoplay is {'on' if enabled else 'off'}.")
+            await self.manager.responses.send(
+                interaction, message("autoplay.enabled" if enabled else "autoplay.disabled")
+            )
 
         async def volume_down(interaction: discord.Interaction) -> None:
             volume = await self.session.set_volume(self.session.state.volume - 10)
-            await self.manager.responses.send(interaction, f"Volume is {volume}%.")
+            await self.manager.responses.send(interaction, message("player.volume", volume=volume))
 
         async def volume_up(interaction: discord.Interaction) -> None:
             volume = await self.session.set_volume(self.session.state.volume + 10)
-            await self.manager.responses.send(interaction, f"Volume is {volume}%.")
+            await self.manager.responses.send(interaction, message("player.volume", volume=volume))
 
         async def queue(interaction: discord.Interaction) -> None:
             view = QueueView(self.session, self.manager.responses)
@@ -241,6 +260,18 @@ class ControllerManager:
         channel = self.bot.get_channel(session.state.text_channel_id or 0)
         if not isinstance(channel, (discord.VoiceChannel, discord.StageChannel)):
             return
+        if (
+            session.state.controller_message_id
+            and session.state.controller_channel_id != channel.id
+        ):
+            if session.state.controller_channel_id:
+                await self._delete_message(
+                    session.state.controller_channel_id,
+                    session.state.controller_message_id,
+                )
+            session.state.controller_channel_id = None
+            session.state.controller_message_id = None
+            await self.storage.clear_controller_cleanup(session.guild_id)
         if session.state.controller_message_id:
             self.request_update(session)
             return
@@ -296,7 +327,13 @@ class ControllerManager:
             )
             session.state.controller_channel_id = None
             session.state.controller_message_id = None
-        if event in {"stopping", "stopped", "dormant", "idle_timeout", "voice_move_failed", "voice_recovery_failed"}:
+        if session.state.dormant or event in {
+            "stopping",
+            "stopped",
+            "idle_timeout",
+            "voice_move_failed",
+            "voice_recovery_failed",
+        }:
             if session.state.controller_channel_id and session.state.controller_message_id:
                 await self._delete_message(
                     session.state.controller_channel_id, session.state.controller_message_id
@@ -304,6 +341,7 @@ class ControllerManager:
                 session.state.controller_channel_id = None
                 session.state.controller_message_id = None
                 await self.storage.clear_controller_cleanup(session.guild_id)
+                await self.storage.save_player(session.state)
             return
         if session.active:
             await self.ensure(session)
@@ -322,11 +360,16 @@ class ControllerManager:
                 return
 
     async def shutdown(self) -> None:
-        for task in self.edit_tasks.values():
+        tasks = list(self.edit_tasks.values())
+        for task in tasks:
             task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         for session in self.players.sessions.values():
             if session.state.controller_channel_id and session.state.controller_message_id:
                 await self._delete_message(
                     session.state.controller_channel_id, session.state.controller_message_id
                 )
                 await self.storage.clear_controller_cleanup(session.guild_id)
+                session.state.controller_channel_id = None
+                session.state.controller_message_id = None

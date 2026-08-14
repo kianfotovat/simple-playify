@@ -203,7 +203,8 @@ class Extractor:
         extractor = str(info.get("extractor_key") or info.get("extractor") or "unknown").lower()
         if not _is_url(str(webpage_url)) and "youtube" in extractor and info.get("id"):
             webpage_url = f"https://www.youtube.com/watch?v={info['id']}"
-        stream_url = info.get("url") if info.get("url") != webpage_url else None
+        raw_stream = str(info.get("url") or "")
+        stream_url = raw_stream if _is_url(raw_stream) and raw_stream != webpage_url else None
         return Track(
             title=str(info.get("title") or info.get("id") or "Unknown title"),
             webpage_url=str(webpage_url),
@@ -250,6 +251,18 @@ class Extractor:
             raise ResolveError("the request is empty")
         if _is_url(query) and _direct_extension(query) in DIRECT_EXTENSIONS:
             return [await self._direct(query, requested_by, provenance)]
+        is_url = _is_url(query)
+        if is_url:
+            host = (urlsplit(query).hostname or "").lower()
+            if host != "youtu.be" and not any(
+                host == domain or host.endswith("." + domain)
+                for domain in ("youtube.com", "soundcloud.com", "twitch.tv", "bandcamp.com")
+            ):
+                raise ResolveError("direct media URLs must end with a supported extension")
+            try:
+                await validate_url(query)
+            except UnsafeUrlError as exc:
+                raise ResolveError(str(exc)) from exc
         cache_key = f"{query}|{allow_playlist}"
         if cache_key in self.failure_cache:
             raise ResolveError(self.failure_cache[cache_key])
@@ -258,18 +271,31 @@ class Extractor:
                 self._track(info, requested_by=requested_by, provenance=provenance)
                 for info in self.success_cache[cache_key]
             ]
-        target = query if _is_url(query) else f"ytsearch1:{query}"
+        target = query if is_url else f"ytsearch1:{query}"
+        first_error: ResolveError | None = None
         try:
             data = await self._extract(target)
         except ResolveError as exc:
-            if any(marker in str(exc).lower() for marker in DEFINITIVE_MARKERS):
-                self.failure_cache[cache_key] = str(exc)
-            raise
+            first_error = exc
+            if is_url or not Config.get("soundcloud_fallback", True):
+                if any(marker in str(exc).lower() for marker in DEFINITIVE_MARKERS):
+                    self.failure_cache[cache_key] = str(exc)
+                raise
+            data = await self._extract(f"scsearch1:{query}")
         entries = data.get("entries") if isinstance(data, dict) else None
         raw = [entry for entry in entries or [data] if isinstance(entry, dict)]
+        if not raw and not is_url and Config.get("soundcloud_fallback", True):
+            try:
+                fallback = await self._extract(f"scsearch1:{query}")
+                entries = fallback.get("entries") if isinstance(fallback, dict) else None
+                raw = [entry for entry in entries or [fallback] if isinstance(entry, dict)]
+            except ResolveError:
+                pass
         if not allow_playlist and raw:
             raw = raw[:1]
         if not raw:
+            if first_error:
+                raise first_error
             raise ResolveError("no playable tracks were found")
         self.success_cache[cache_key] = raw
         return [self._track(info, requested_by=requested_by, provenance=provenance) for info in raw]
@@ -309,6 +335,9 @@ class Extractor:
         return [self._track(entry, requested_by=None, provenance="user") for entry in entries[:limit]]
 
     async def refresh_stream(self, track: Track) -> Track:
+        cache_key = f"{sanitize_query(track.webpage_url)}|False"
+        self.success_cache.pop(cache_key, None)
+        self.failure_cache.pop(cache_key, None)
         tracks = await self.resolve_one(
             track.webpage_url,
             requested_by=track.requested_by,
@@ -329,8 +358,22 @@ class Extractor:
             )
             if video_id:
                 targets.append(f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}")
-        if Config.get("soundcloud_fallback", True) and "soundcloud" in seed.source:
-            targets.append(seed.webpage_url)
+        if Config.get("soundcloud_fallback", True):
+            try:
+                if "soundcloud" in seed.source:
+                    soundcloud_seed = await self._extract(seed.webpage_url, flat=True)
+                else:
+                    soundcloud_seed = await self._extract(
+                        f"scsearch1:{seed.title} {seed.uploader}", flat=True
+                    )
+                entries = soundcloud_seed.get("entries") or [soundcloud_seed]
+                first = next((entry for entry in entries if isinstance(entry, dict)), None)
+                if first and first.get("id"):
+                    targets.append(
+                        f"https://soundcloud.com/discover/sets/track-stations:{first['id']}"
+                    )
+            except ResolveError:
+                LOGGER.info("SoundCloud recommendation fallback had no compatible seed")
         generated: list[Track] = []
         for target in targets[:2]:
             try:

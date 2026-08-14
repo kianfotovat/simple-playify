@@ -98,7 +98,14 @@ class Storage:
                 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
                 backup = BACKUP_DIR / f"playify-corrupt-{stamp}.db"
-                shutil.move(self.path, backup)
+                sequence = 1
+                while backup.exists():
+                    backup = BACKUP_DIR / f"playify-corrupt-{stamp}-{sequence}.db"
+                    sequence += 1
+                for suffix in ("", "-wal", "-shm"):
+                    source = Path(str(self.path) + suffix)
+                    if source.exists():
+                        shutil.move(source, Path(str(backup) + suffix))
             await self._connect_and_check(fresh=True)
 
         assert self.connection is not None

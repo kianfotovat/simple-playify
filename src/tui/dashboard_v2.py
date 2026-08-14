@@ -73,17 +73,22 @@ def _logs(bot: BotProcess, height: int) -> Panel:
 
 
 def _dashboard(bot: BotProcess, width: int, height: int):
+    ascii_symbols = Config.get("symbol_mode", "auto") == "ascii"
+    separator = " | " if ascii_symbols else " • "
+    size = f"{width}x{height}" if ascii_symbols else f"{width}×{height}"
     if width < 100 or height < 30:
         return Panel(
-            f"Resize the terminal to at least 100×30. Current size: {width}×{height}",
+            f"Resize the terminal to at least 100x30. Current size: {size}"
+            if ascii_symbols
+            else f"Resize the terminal to at least 100×30. Current size: {size}",
             title="Playify",
             border_style="yellow",
         )
     status = "ONLINE" if bot.is_online else "STARTING" if bot.is_running else "OFFLINE"
     restart = bot.metrics.get("restart_required")
-    badge = f"  •  [yellow]{restart} restart required[/]" if restart else ""
+    badge = f"{separator}[yellow]{restart} restart required[/]" if restart else ""
     header = Panel(
-        f"[bold cyan]Playify {display_version()}[/]  •  {status}{badge}",
+        f"[bold cyan]Playify {display_version()}[/]{separator}{status}{badge}",
         border_style="blue",
     )
     hotkeys = Panel(

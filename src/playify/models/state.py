@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 Provenance = Literal["user", "autoplay"]
@@ -20,16 +20,37 @@ def new_id() -> str:
 
 
 def safe_descriptor(value: str) -> str:
-    """Strip credentials, query strings, and fragments before persistence."""
+    """Keep only public resource identifiers; strip credentials and sensitive URL data."""
 
     if not value.lower().startswith(("http://", "https://")):
         return value
     parts = urlsplit(value)
     hostname = parts.hostname or ""
-    netloc = hostname
+    netloc = f"[{hostname}]" if ":" in hostname else hostname
     if parts.port:
         netloc += f":{parts.port}"
-    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    public_parameters = {
+        "youtube.com": {"v", "list"},
+        "www.youtube.com": {"v", "list"},
+        "music.youtube.com": {"v", "list"},
+        "youtu.be": {"list"},
+        "music.apple.com": {"i"},
+        "music.amazon.com": {"trackasin"},
+        "music.amazon.co.uk": {"trackasin"},
+        "music.amazon.de": {"trackasin"},
+        "music.amazon.fr": {"trackasin"},
+        "music.amazon.it": {"trackasin"},
+        "music.amazon.es": {"trackasin"},
+        "music.amazon.co.jp": {"trackasin"},
+    }.get(hostname.lower(), set())
+    query = urlencode(
+        [
+            (key, item)
+            for key, item in parse_qsl(parts.query, keep_blank_values=False)
+            if key.lower() in public_parameters
+        ]
+    )
+    return urlunsplit((parts.scheme, netloc, parts.path, query, ""))
 
 
 @dataclass(slots=True)

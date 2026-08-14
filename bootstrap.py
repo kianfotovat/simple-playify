@@ -19,7 +19,7 @@ INSTALLATION = DATA / "installation.json"
 REQUIREMENTS = ROOT / "requirements.txt"
 SUPPORTED = {(3, 12), (3, 13), (3, 14)}
 IMPORT_CHECK = (
-    "import aiohttp, aiosqlite, cachetools, discord, dotenv, psutil, rich, spotipy, yt_dlp; "
+    "import aiohttp, aiosqlite, cachetools, discord, dotenv, psutil, rich, spotipy, spotify_scraper, yt_dlp; "
     "import nacl, davey"
 )
 

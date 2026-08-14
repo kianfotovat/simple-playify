@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable, Sequence
 import discord
 
 from ..discord_utils import Responses, format_time, safe_text
+from ..messages import message
 from ..models import Track
 from ..services.player import PlayerSession
 
@@ -60,12 +61,15 @@ class QueueView(discord.ui.View):
                     changed = await self.session.jump(occurrence_id)
                 if changed is None:
                     await self.responses.send(
-                        interaction, "That queue entry no longer exists.", lifetime="error"
+                        interaction, message("queue.missing"), lifetime="error"
                     )
                 else:
-                    verb = "Removed" if self.action == "remove" else "Jumped to"
                     await self.responses.send(
-                        interaction, f"{verb} **{safe_text(changed.title)}**."
+                        interaction,
+                        message(
+                            "queue.removed" if self.action == "remove" else "queue.jumped",
+                            title=safe_text(changed.title),
+                        ),
                     )
                 self._rebuild()
                 if self.message:

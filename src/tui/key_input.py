@@ -5,6 +5,9 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
+import time
+
+from rich.console import Console
 
 
 @contextlib.contextmanager
@@ -62,3 +65,19 @@ def read_key() -> str | None:
         "[1~": "home",
         "[4~": "end",
     }.get(sequence, "esc")
+
+
+def wait_for_key(console: Console, prompt: str = "Press any key or Esc to return…") -> str:
+    """Wait for one key in a TTY, with a line-input fallback for redirected stdin."""
+
+    if not sys.stdin.isatty():
+        console.input(prompt)
+        return "enter"
+    console.print(prompt, end="")
+    try:
+        with terminal_mode():
+            while (key := read_key()) is None:
+                time.sleep(0.03)
+        return key
+    finally:
+        console.print()

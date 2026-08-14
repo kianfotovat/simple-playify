@@ -62,11 +62,11 @@ def _convert(key: str, raw: str):
     return raw.strip()
 
 
-def run_settings(console: Console) -> bool:
-    """Return True if any bot setting needs a restart."""
+def run_settings(console: Console) -> str | None:
+    """Return the highest restart scope required by changes."""
 
     Config.reload()
-    restart_required = False
+    restart_required: str | None = None
     while True:
         table = Table(title="Playify settings", show_lines=False)
         table.add_column("#", justify="right")
@@ -79,7 +79,7 @@ def run_settings(console: Console) -> bool:
         console.clear()
         console.print(table)
         if restart_required:
-            console.print("[warning]Restart required to apply one or more changes.[/]")
+            console.print(f"[warning]{restart_required} restart required to apply changes.[/]")
         selection = Prompt.ask("Setting number, or Esc to return", default="esc").lower()
         if selection in {"esc", "q", "back"}:
             return restart_required
@@ -101,5 +101,7 @@ def run_settings(console: Console) -> bool:
             console.print(f"[error]{exc}[/]")
             console.input("Press Enter…")
             continue
-        if key not in {"color_mode", "symbol_mode"}:
-            restart_required = True
+        if key in {"color_mode", "symbol_mode"}:
+            restart_required = "Launcher"
+        elif restart_required is None:
+            restart_required = "Bot"
