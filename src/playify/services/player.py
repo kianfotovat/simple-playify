@@ -56,6 +56,8 @@ class PlayerSession:
         self.lock = asyncio.Lock()
         self.pending_tasks: dict[str, asyncio.Task[None]] = {}
         self.pending_results: dict[str, tuple[list[Track], str | None] | BaseException] = {}
+        self.import_outcomes: dict[str, tuple[int, str | None]] = {}
+        self.import_waiters: dict[str, asyncio.Future[tuple[int, str | None]]] = {}
         self.priority_anchor: list[str] = []
         self.playback_started_at: float | None = None
         self.start_offset = state.position
@@ -105,9 +107,23 @@ class PlayerSession:
                 self.priority_anchor.clear()
             pending = PendingImport(request, priority=priority, requested_by=requested_by)
             self.state.pending.append(pending)
+            self.import_waiters[pending.import_id] = asyncio.get_running_loop().create_future()
             await self.changed("import_pending")
             self._start_pending(pending)
             return pending
+
+    async def add_resolved(self, tracks: list[Track], *, priority: bool = False) -> int:
+        """Commit already-resolved search selections without re-extracting them."""
+
+        async with self.lock:
+            if priority:
+                self.state.queue[0:0] = tracks
+            else:
+                self.state.queue.extend(tracks)
+            await self.changed("tracks_added")
+            if self.state.current is None and self.active and self.state.queue:
+                await self._advance(force=True)
+            return len(tracks)
 
     def _start_pending(self, pending: PendingImport) -> None:
         if pending.import_id in self.pending_tasks:
@@ -139,7 +155,10 @@ class PlayerSession:
             if isinstance(result, BaseException):
                 if not isinstance(result, asyncio.CancelledError):
                     LOGGER.warning("Import failed for guild %s: %s", self.guild_id, result)
+                    self._finish_import(pending.import_id, 0, str(result))
                     await self.changed("import_failed")
+                else:
+                    self._finish_import(pending.import_id, 0, "cancelled")
                 continue
             tracks, partial_error = result
             if pending.priority:
@@ -159,14 +178,35 @@ class PlayerSession:
                 self.priority_anchor.extend(track.occurrence_id for track in tracks)
             else:
                 self.state.queue.extend(tracks)
+            self._finish_import(pending.import_id, len(tracks), partial_error)
             await self.changed("import_partial" if partial_error else "import_complete")
             if self.state.current is None and self.active and self.state.queue:
                 await self._advance(force=True)
+
+    def _finish_import(self, import_id: str, count: int, error: str | None) -> None:
+        outcome = (count, error)
+        self.import_outcomes[import_id] = outcome
+        waiter = self.import_waiters.pop(import_id, None)
+        if waiter and not waiter.done():
+            waiter.set_result(outcome)
+
+    async def wait_import(self, pending: PendingImport) -> tuple[int, str | None]:
+        outcome = self.import_outcomes.pop(pending.import_id, None)
+        if outcome is not None:
+            return outcome
+        waiter = self.import_waiters.get(pending.import_id)
+        if waiter is None:
+            return (0, "cancelled")
+        outcome = await waiter
+        self.import_outcomes.pop(pending.import_id, None)
+        return outcome
 
     async def cancel_pending(self) -> int:
         count = len(self.state.pending)
         for task in self.pending_tasks.values():
             task.cancel()
+        for import_id in list(self.import_waiters):
+            self._finish_import(import_id, 0, "cancelled")
         self.pending_tasks.clear()
         self.pending_results.clear()
         self.state.pending.clear()
@@ -424,9 +464,11 @@ class PlayerSession:
                 await self.voice.disconnect(force=True)
             self.voice = None
             controller = (self.state.controller_channel_id, self.state.controller_message_id)
-            self.state = PlayerSnapshot(self.guild_id)
             if all(controller):
                 await self.storage.set_controller_cleanup(self.guild_id, *controller)  # type: ignore[arg-type]
+                if self.on_change:
+                    await self.on_change(self, "stopping")
+            self.state = PlayerSnapshot(self.guild_id)
             await self.storage.delete_player(self.guild_id)
             if self.on_change:
                 await self.on_change(self, "stopped")

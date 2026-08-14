@@ -273,6 +273,13 @@ class Storage:
             await self._db().commit()
             return rows
 
+    async def clear_controller_cleanup(self, guild_id: int) -> None:
+        async with self._write_lock:
+            await self._db().execute(
+                "DELETE FROM controller_cleanup WHERE guild_id = ?", (guild_id,)
+            )
+            await self._db().commit()
+
     async def add_deletion_job(
         self, channel_id: int, message_id: int, delete_after: datetime, kind: str
     ) -> None:
