@@ -177,6 +177,11 @@ class PlayifyClient(discord.Client):
                     interaction, message("command.expired"), lifetime="error"
                 )
             return
+        if isinstance(original, ValueError):
+            LOGGER.warning("Rejected command input: %s", original)
+            key = "voice.empty" if "empty" in str(original).lower() else "player.request_failed"
+            await self.responses.send(interaction, message(key), lifetime="error")
+            return
         await self.responses.unexpected(interaction, original)
 
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
@@ -235,8 +240,16 @@ class PlayifyClient(discord.Client):
         if self._closing:
             return
         self._closing = True
-        if self.heartbeat_task:
-            self.heartbeat_task.cancel()
+        current = asyncio.current_task()
+        lifecycle_tasks = [
+            task
+            for task in (self.ready_task, self.heartbeat_task)
+            if task is not None and task is not current and not task.done()
+        ]
+        for task in lifecycle_tasks:
+            task.cancel()
+        if lifecycle_tasks:
+            await asyncio.gather(*lifecycle_tasks, return_exceptions=True)
         await self.players.shutdown()
         await self.controllers.shutdown()
         await self.responses.close()

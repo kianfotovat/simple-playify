@@ -185,6 +185,14 @@ class PlayerSession:
             await self.changed("import_partial" if partial_error else "import_complete")
             if self.state.current is None and self.active and self.state.queue:
                 await self._advance(force=True)
+        if not self.state.pending and self.active and not self.state.queue:
+            if self.state.current is not None and self.state.autoplay_enabled:
+                self.schedule_autoplay()
+            elif self.state.current is None:
+                if self.state.autoplay_enabled and self.state.history:
+                    self.schedule_autoplay(self.state.history[-1])
+                else:
+                    self._schedule_idle_disconnect()
 
     def _finish_import(self, import_id: str, count: int, error: str | None) -> None:
         outcome = (count, error)
@@ -238,21 +246,25 @@ class PlayerSession:
         self.state.text_channel_id = text_channel_id
         self.state.dormant = False
         await self.changed("voice_connected")
-        if resume and self.state.current:
-            await self._play_current(self.state.position)
-        elif resume and self.state.queue:
-            await self._advance(force=True)
-        elif not resume and self.state.current:
-            await self._play_current(self.state.position)
-            if self.voice:
-                self.voice.pause()
-            self.state.paused = True
-            self.state.position = self.start_offset
-            self.playback_started_at = None
-            await self.changed("reconnected_paused")
-        elif not resume:
-            self.state.paused = True
-            await self.changed("reconnected_paused")
+        try:
+            if resume and self.state.current:
+                await self._play_current(self.state.position)
+            elif resume and self.state.queue:
+                await self._advance(force=True)
+            elif not resume and self.state.current:
+                await self._play_current(self.state.position)
+                if self.voice:
+                    self.voice.pause()
+                self.state.paused = True
+                self.state.position = self.start_offset
+                self.playback_started_at = None
+                await self.changed("reconnected_paused")
+            elif not resume:
+                self.state.paused = True
+                await self.changed("reconnected_paused")
+        except Exception:
+            await self.become_dormant("voice_start_failed")
+            raise
 
     async def move_to(
         self, channel: discord.VoiceChannel | discord.StageChannel, text_channel_id: int
@@ -260,7 +272,8 @@ class PlayerSession:
         try:
             await self.connect(channel, text_channel_id)
         except Exception:
-            await self.become_dormant("voice_move_failed")
+            if not self.state.dormant:
+                await self.become_dormant("voice_move_failed")
             raise
 
     async def become_dormant(self, event: str = "dormant") -> None:
@@ -316,7 +329,9 @@ class PlayerSession:
         if self.idle_task:
             self.idle_task.cancel()
             self.idle_task = None
-        self.start_offset = max(0.0, position)
+        self.start_offset = 0.0 if track.is_live else max(0.0, position)
+        self.playback_started_at = None
+        source = self._audio_source(track, self.start_offset)
         self.state.position = self.start_offset
         self.state.paused = False
         self.state.dormant = False
@@ -330,7 +345,13 @@ class PlayerSession:
                 )
             )
 
-        self.voice.play(self._audio_source(track, self.start_offset), after=after)
+        try:
+            self.voice.play(source, after=after)
+        except Exception:
+            source.cleanup()
+            self.playback_started_at = None
+            self.state.paused = True
+            raise
         await self.changed("track_started")
 
     async def _after_track(self, generation: int, error: Exception | None) -> None:
@@ -339,40 +360,65 @@ class PlayerSession:
                 return
             current = self.state.current
             if error and current and current.occurrence_id not in self._stream_retry_ids:
+                resume_position = self.position
+                self.state.position = resume_position
+                self.playback_started_at = None
                 self._stream_retry_ids.add(current.occurrence_id)
                 try:
                     self.state.current = await self.extractor.refresh_stream(current)
-                    await self._play_current(self.position)
+                    await self._play_current(resume_position)
                     return
                 except Exception:
                     LOGGER.exception("Stream refresh failed for guild %s", self.guild_id)
-            await self._advance(force=False)
+            await self._advance(force=error is not None)
 
     async def _advance(self, *, force: bool) -> Track | None:
         previous = self.state.current
         if previous and self.state.loop_current and not force:
             self.state.position = 0
-            await self._play_current(0)
-            return previous
+            try:
+                await self._play_current(0)
+                return previous
+            except Exception:
+                LOGGER.exception("Could not loop track in guild %s; advancing", self.guild_id)
         if previous:
             self.state.history.append(previous)
             self._stream_retry_ids.discard(previous.occurrence_id)
-        self.state.current = self.state.queue.pop(0) if self.state.queue else None
-        self.state.position = 0
-        self.playback_started_at = None
-        if self.state.current:
+        self.state.current = None
+        while self.state.queue:
+            self.state.current = self.state.queue.pop(0)
+            self.state.position = 0
+            self.playback_started_at = None
             if self.active:
-                await self._play_current(0)
+                try:
+                    await self._play_current(0)
+                except Exception:
+                    failed = self.state.current
+                    if failed:
+                        self.state.history.append(failed)
+                        self._stream_retry_ids.discard(failed.occurrence_id)
+                    LOGGER.exception(
+                        "Could not start queued track in guild %s; trying the next one",
+                        self.guild_id,
+                    )
+                    self.state.current = None
+                    continue
             else:
                 await self.changed("track_selected")
-            if self.state.autoplay_enabled:
+            if (
+                self.state.autoplay_enabled
+                and not self.state.queue
+                and not self.state.pending
+            ):
                 self.schedule_autoplay()
             return self.state.current
+        self.state.position = 0
+        self.playback_started_at = None
         self.state.paused = True
         await self.changed("queue_exhausted")
-        if self.state.autoplay_enabled and previous:
+        if self.state.autoplay_enabled and previous and not self.state.pending:
             self.schedule_autoplay(previous)
-        else:
+        elif not self.state.pending:
             self._schedule_idle_disconnect()
         return None
 
@@ -481,7 +527,10 @@ class PlayerSession:
                 if self.voice.is_playing() or self.voice.is_paused():
                     self.voice.stop()
                 self.expected_disconnect_until = time.monotonic() + 10
-                await self.voice.disconnect(force=True)
+                try:
+                    await self.voice.disconnect(force=True)
+                except Exception:
+                    LOGGER.exception("Voice disconnect failed while stopping guild %s", self.guild_id)
             self.voice = None
             controller = (self.state.controller_channel_id, self.state.controller_message_id)
             if all(controller):
@@ -561,12 +610,24 @@ class PlayerSession:
                     track for track in self.state.queue if track.provenance != "autoplay"
                 ]
             await self.changed("autoplay")
-            if enabled and self.state.current:
+            if enabled and self.active and self.state.current and not self.state.queue and not self.state.pending:
                 self.schedule_autoplay()
+            elif (
+                not enabled
+                and self.active
+                and self.state.current is None
+                and not self.state.queue
+                and not self.state.pending
+            ):
+                self._schedule_idle_disconnect()
             return enabled
 
-    def schedule_autoplay(self, seed: Track | None = None) -> None:
+    def schedule_autoplay(self, seed: Track | None = None, *, force: bool = False) -> None:
         if self.autoplay_task and not self.autoplay_task.done():
+            return
+        if self.state.queue and not force:
+            return
+        if not self.active:
             return
         seed = seed or self.state.current
         if seed and seed.source == "direct":
@@ -583,6 +644,11 @@ class PlayerSession:
                 async with self.lock:
                     if not self.state.autoplay_enabled:
                         return
+                    if not generated:
+                        await self.changed("autoplay_failed")
+                        if self.state.current is None and not self.state.queue:
+                            self._schedule_idle_disconnect()
+                        return
                     self.state.queue.extend(generated)
                     await self.changed("autoplay_generated")
                     if self.state.current is None and self.active and self.state.queue:
@@ -592,6 +658,8 @@ class PlayerSession:
             except Exception:
                 LOGGER.exception("Autoplay failed for guild %s", self.guild_id)
                 await self.changed("autoplay_failed")
+                if self.state.current is None and not self.state.queue:
+                    self._schedule_idle_disconnect()
 
         self.autoplay_task = asyncio.create_task(generate(), name=f"autoplay-{self.guild_id}")
 
@@ -610,7 +678,7 @@ class PlayerSession:
             else:
                 self.state.queue.insert(0, seed)
             await self.changed("autoplay_seed")
-            self.schedule_autoplay(seed)
+            self.schedule_autoplay(seed, force=True)
         return seed
 
     async def recover_voice(self) -> None:
@@ -722,7 +790,13 @@ class PlayerManager:
                     if session.voice.is_playing() or session.voice.is_paused():
                         session.voice.stop()
                     session.expected_disconnect_until = time.monotonic() + 10
-                    await session.voice.disconnect(force=True)
+                    try:
+                        await session.voice.disconnect(force=True)
+                    except Exception:
+                        LOGGER.exception(
+                            "Voice disconnect failed while closing guild %s",
+                            session.guild_id,
+                        )
                     session.voice = None
                 if active_tasks:
                     await asyncio.gather(*active_tasks, return_exceptions=True)

@@ -55,8 +55,11 @@ class Responses:
             self._spawn_deletion(channel_id, message_id, delete_after, kind)
 
     async def close(self) -> None:
-        for task in self.tasks.values():
+        tasks = list(self.tasks.values())
+        for task in tasks:
             task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self.tasks.clear()
 
     async def send(
@@ -148,6 +151,7 @@ class Responses:
 
         async def delete_once() -> None:
             delay = max(0.0, (delete_after.astimezone(UTC) - datetime.now(UTC)).total_seconds())
+            completed = False
             try:
                 await asyncio.sleep(delay)
                 channel = self.bot.get_channel(channel_id)
@@ -162,8 +166,10 @@ class Responses:
                         await sent.delete()
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                         pass
+                completed = True
             finally:
-                await self.storage.remove_deletion_job(channel_id, message_id)
+                if completed:
+                    await self.storage.remove_deletion_job(channel_id, message_id)
                 self.tasks.pop(key, None)
 
         self.tasks[key] = asyncio.create_task(delete_once(), name=f"delete-{message_id}")

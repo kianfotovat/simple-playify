@@ -49,6 +49,7 @@ MESSAGES: dict[str, str] = {
     "player.nothing_playing": "Nothing is playing.",
     "player.not_paused": "Playback is not paused.",
     "player.reconnected": "Reconnected; playback remains paused.",
+    "player.not_dormant": "The session is already connected; reconnect is only for dormant sessions.",
     "player.no_session": "There is no session to adjust.",
     "player.seek_format": "Use seconds, MM:SS, or HH:MM:SS with whole, non-negative numbers.",
     "player.seek_range": "That timestamp is outside the current track.",

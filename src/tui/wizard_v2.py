@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import json
 import os
+import stat
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 import discord
+from dotenv import dotenv_values
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
@@ -18,14 +20,13 @@ USER_AGENT = "Playify/2.1 (+https://github.com/kianfotovat/simple-playify)"
 
 
 def load_env(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                key, value = stripped.split("=", 1)
-                values[key.strip()] = value.strip()
-    return values
+    if not path.exists():
+        return {}
+    return {
+        str(key): str(value)
+        for key, value in dotenv_values(path).items()
+        if key is not None and value is not None
+    }
 
 
 def save_env(path: Path, updates: dict[str, str]) -> None:
@@ -47,8 +48,16 @@ def save_env(path: Path, updates: dict[str, str]) -> None:
             output.append("")
         output.extend(f"{key}={value}" for key, value in remaining.items())
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n".join(output).rstrip() + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.chmod(mode)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _json_request(request: urllib.request.Request, timeout: int = 15) -> dict:

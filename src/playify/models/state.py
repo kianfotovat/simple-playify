@@ -42,6 +42,11 @@ def safe_descriptor(value: str) -> str:
         "music.amazon.it": {"trackasin"},
         "music.amazon.es": {"trackasin"},
         "music.amazon.co.jp": {"trackasin"},
+        "music.amazon.ca": {"trackasin"},
+        "music.amazon.com.au": {"trackasin"},
+        "music.amazon.com.br": {"trackasin"},
+        "music.amazon.com.mx": {"trackasin"},
+        "music.amazon.in": {"trackasin"},
     }.get(hostname.lower(), set())
     query = urlencode(
         [

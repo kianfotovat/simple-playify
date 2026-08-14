@@ -11,7 +11,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 from urllib.parse import parse_qs, quote, urlsplit
 
 from ..config import Config
@@ -31,6 +31,11 @@ AMAZON_DOMAINS = {
     "music.amazon.it",
     "music.amazon.es",
     "music.amazon.co.jp",
+    "music.amazon.ca",
+    "music.amazon.com.au",
+    "music.amazon.com.br",
+    "music.amazon.com.mx",
+    "music.amazon.in",
 }
 AMAZON_REGION = {
     "music.amazon.com": ("en_US", "USD", "America/Los_Angeles"),
@@ -40,6 +45,11 @@ AMAZON_REGION = {
     "music.amazon.it": ("it_IT", "EUR", "Europe/Rome"),
     "music.amazon.es": ("es_ES", "EUR", "Europe/Madrid"),
     "music.amazon.co.jp": ("ja_JP", "JPY", "Asia/Tokyo"),
+    "music.amazon.ca": ("en_CA", "CAD", "America/Toronto"),
+    "music.amazon.com.au": ("en_AU", "AUD", "Australia/Sydney"),
+    "music.amazon.com.br": ("pt_BR", "BRL", "America/Sao_Paulo"),
+    "music.amazon.com.mx": ("es_MX", "MXN", "America/Mexico_City"),
+    "music.amazon.in": ("en_IN", "INR", "Asia/Kolkata"),
 }
 
 
@@ -96,16 +106,26 @@ class CatalogRouter:
     async def resolve(self, url: str) -> CatalogResult:
         host = _host(url)
         if host in SPOTIFY_HOSTS:
-            return await self._spotify(url)
-        if host in DEEZER_HOSTS:
-            return await self._deezer(url)
-        if host in APPLE_HOSTS:
-            return await self._apple(url)
-        if host in TIDAL_HOSTS:
-            return await self._tidal(url)
-        if host in AMAZON_DOMAINS:
-            return await self._amazon(url)
-        raise CatalogError("unsupported catalog URL")
+            result = await self._spotify(url)
+        elif host in DEEZER_HOSTS:
+            result = await self._deezer(url)
+        elif host in APPLE_HOSTS:
+            result = await self._apple(url)
+        elif host in TIDAL_HOSTS:
+            result = await self._tidal(url)
+        elif host in AMAZON_DOMAINS:
+            result = await self._amazon(url)
+        else:
+            raise CatalogError("unsupported catalog URL")
+        seen: set[tuple[str, str]] = set()
+        unique: list[CatalogItem] = []
+        for item in result.items:
+            key = (item.title.casefold(), item.artist.casefold())
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        result.items = unique
+        return result
 
     async def _spotify(self, url: str) -> CatalogResult:
         clean_url = url.split("?", 1)[0]
@@ -146,6 +166,8 @@ class CatalogRouter:
             retries=3,
         )
         path = urlsplit(url).path.strip("/").split("/")
+        if path and path[0].startswith("intl-"):
+            path = path[1:]
         if len(path) < 2:
             raise CatalogError("invalid Spotify URL")
         kind, identifier = path[0], path[1]
@@ -192,6 +214,8 @@ class CatalogRouter:
 
         client = SpotifyClient()
         path = urlsplit(url).path.strip("/").split("/")
+        if path and path[0].startswith("intl-"):
+            path = path[1:]
         if len(path) < 2:
             raise CatalogError("invalid Spotify URL")
         kind = path[0]

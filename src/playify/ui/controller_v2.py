@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from urllib.parse import urlsplit
 
 import discord
@@ -14,7 +15,7 @@ from ..messages import message
 from ..services.extractor import public_canonical_link
 from ..services.player import PlayerManager, PlayerSession, _human_count
 from ..storage import Storage
-from .views import QueueView
+from .views import QueueView, allowed_interaction
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +61,8 @@ class ControllerView(discord.ui.View):
         self._add_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await allowed_interaction(self.manager.responses, interaction):
+            return False
         current = self.session.state.controller_message_id
         if interaction.message is None or interaction.message.id != current:
             await self.manager.responses.send(
@@ -189,6 +192,7 @@ class ControllerManager:
         self.responses = responses
         self.edit_tasks: dict[int, asyncio.Task[None]] = {}
         self.dirty: set[int] = set()
+        self.expected_deletions: dict[tuple[int, int], float] = {}
 
     async def startup_cleanup(self) -> None:
         pointers = await self.storage.pop_controller_cleanups()
@@ -210,6 +214,13 @@ class ControllerManager:
                 await session.changed("controller_cleaned")
 
     async def _delete_message(self, channel_id: int, message_id: int) -> None:
+        now = time.monotonic()
+        self.expected_deletions = {
+            key: marked
+            for key, marked in self.expected_deletions.items()
+            if now - marked < 60
+        }
+        self.expected_deletions[(channel_id, message_id)] = now
         try:
             channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
             if hasattr(channel, "fetch_message"):
@@ -348,6 +359,8 @@ class ControllerManager:
             self.request_update(session)
 
     async def raw_delete(self, channel_id: int, message_id: int) -> None:
+        if self.expected_deletions.pop((channel_id, message_id), None) is not None:
+            return
         for session in self.players.sessions.values():
             if (
                 session.state.controller_channel_id == channel_id

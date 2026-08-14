@@ -43,6 +43,7 @@ MUTATIONS = {
     "autoplay",
     "volume",
 }
+WAKES_DORMANT = {"resume", "replay", "seek", "skip", "previous", "jumpto", "reconnect"}
 
 
 def is_manager(interaction: discord.Interaction) -> bool:
@@ -171,6 +172,19 @@ class CommandSuite:
         if base in MUTATIONS and voice_chat(interaction) is None:
             await self.app.responses.send(
                 interaction, message("command.voice_chat_only"), lifetime="error"
+            )
+            return False
+        existing = self.app.players.sessions.get(interaction.guild.id)
+        target = voice_chat(interaction)
+        if (
+            base in WAKES_DORMANT
+            and existing is not None
+            and existing.state.dormant
+            and target is not None
+            and _human_count(target) == 0
+        ):
+            await self.app.responses.send(
+                interaction, message("voice.empty"), lifetime="error"
             )
             return False
         return True
@@ -354,7 +368,7 @@ class CommandSuite:
                     lifetime="error" if move_failed else "success",
                 )
 
-            view = SearchView(tracks, picked)
+            view = SearchView(tracks, picked, self.app.responses)
             embed = discord.Embed(
                 title="Search results",
                 description="\n".join(
@@ -427,7 +441,7 @@ class CommandSuite:
             if session.state.current.is_live:
                 await self.app.responses.send(interaction, message("player.live_seek"), lifetime="error")
                 return
-            view = SeekView(session)
+            view = SeekView(session, self.app.responses)
             sent = await self.app.responses.send(
                 interaction, embed=view.embed(), view=view, lifetime="interactive"
             )
@@ -476,6 +490,11 @@ class CommandSuite:
 
     async def reconnect(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
+        if not session.state.dormant:
+            await self.app.responses.send(
+                interaction, message("player.not_dormant"), lifetime="error"
+            )
+            return
         await self._connect_fresh(interaction, session, resume=False)
         await self.app.responses.send(interaction, message("player.reconnected"))
 

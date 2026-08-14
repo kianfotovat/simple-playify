@@ -18,7 +18,7 @@ from cachetools import TTLCache
 from ..config import Config
 from ..constants import COOKIE_DIR
 from ..models import Track
-from .catalogs import CatalogError, CatalogRouter
+from .catalogs import CatalogRouter
 from .http_client import HttpClient, UnsafeUrlError, validate_url
 
 LOGGER = logging.getLogger(__name__)
@@ -349,7 +349,7 @@ class Extractor:
         return refreshed
 
     async def recommendations(self, seed: Track) -> list[Track]:
-        targets: list[str] = []
+        primary: str | None = None
         parts = urlsplit(seed.webpage_url)
         host = (parts.hostname or "").lower()
         if host in {"youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be"}:
@@ -357,33 +357,46 @@ class Extractor:
                 parts.path.strip("/") if host == "youtu.be" else parse_qs(parts.query).get("v", [None])[0]
             )
             if video_id:
-                targets.append(f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}")
-        if Config.get("soundcloud_fallback", True):
-            try:
-                if "soundcloud" in seed.source:
-                    soundcloud_seed = await self._extract(seed.webpage_url, flat=True)
-                else:
-                    soundcloud_seed = await self._extract(
-                        f"scsearch1:{seed.title} {seed.uploader}", flat=True
-                    )
-                entries = soundcloud_seed.get("entries") or [soundcloud_seed]
-                first = next((entry for entry in entries if isinstance(entry, dict)), None)
-                if first and first.get("id"):
-                    targets.append(
-                        f"https://soundcloud.com/discover/sets/track-stations:{first['id']}"
-                    )
-            except ResolveError:
-                LOGGER.info("SoundCloud recommendation fallback had no compatible seed")
-        generated: list[Track] = []
-        for target in targets[:2]:
+                primary = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
+
+        seed_link = public_canonical_link(seed) or seed.webpage_url
+
+        async def collect(target: str) -> list[Track]:
             try:
                 data = await self._extract(target, flat=True)
             except ResolveError:
                 LOGGER.exception("Recommendation source failed")
-                continue
+                return []
             entries = [entry for entry in data.get("entries", []) if isinstance(entry, dict)]
+            generated: list[Track] = []
+            seen: set[str] = set()
             for entry in entries[:50]:
                 track = self._track(entry, requested_by=None, provenance="autoplay")
-                if track.webpage_url != seed.webpage_url:
+                link = public_canonical_link(track) or track.webpage_url
+                if link and link != seed_link and link not in seen:
+                    seen.add(link)
                     generated.append(track)
-        return generated
+            return generated
+
+        if primary:
+            generated = await collect(primary)
+            if generated:
+                return generated
+        if not Config.get("soundcloud_fallback", True):
+            return []
+        try:
+            if "soundcloud" in seed.source:
+                soundcloud_seed = await self._extract(seed.webpage_url, flat=True)
+            else:
+                soundcloud_seed = await self._extract(
+                    f"scsearch1:{seed.title} {seed.uploader}", flat=True
+                )
+            entries = soundcloud_seed.get("entries") or [soundcloud_seed]
+            first = next((entry for entry in entries if isinstance(entry, dict)), None)
+            if first and first.get("id"):
+                return await collect(
+                    f"https://soundcloud.com/discover/sets/track-stations:{first['id']}"
+                )
+        except ResolveError:
+            LOGGER.info("SoundCloud recommendation fallback had no compatible seed")
+        return []

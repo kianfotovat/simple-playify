@@ -14,6 +14,20 @@ from ..models import Track
 from ..services.player import PlayerSession
 
 
+async def allowed_interaction(responses: Responses, interaction: discord.Interaction) -> bool:
+    """Apply the current server allowlist to collaborative component interactions."""
+
+    settings = getattr(responses.bot, "server_settings", {}).get(interaction.guild_id)
+    manager = (
+        isinstance(interaction.user, discord.Member)
+        and interaction.user.guild_permissions.manage_guild
+    )
+    if settings and settings.allowlist and interaction.channel_id not in settings.allowlist and not manager:
+        await responses.send(interaction, message("command.allowed_only"), lifetime="error")
+        return False
+    return True
+
+
 class QueueView(discord.ui.View):
     def __init__(
         self,
@@ -28,6 +42,9 @@ class QueueView(discord.ui.View):
         self.page = 0
         self.message: discord.Message | None = None
         self._rebuild()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await allowed_interaction(self.responses, interaction)
 
     def _tracks(self) -> list[Track]:
         return list(self.session.state.queue)
@@ -128,9 +145,11 @@ class SearchView(discord.ui.View):
         self,
         tracks: Sequence[Track],
         on_pick: Callable[[discord.Interaction, Track], Awaitable[None]],
+        responses: Responses,
     ) -> None:
         super().__init__(timeout=120)
         self.tracks = list(tracks[:10])
+        self.responses = responses
         select = discord.ui.Select(
             placeholder="Choose a result",
             options=[
@@ -151,11 +170,15 @@ class SearchView(discord.ui.View):
         select.callback = selected
         self.add_item(select)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await allowed_interaction(self.responses, interaction)
+
 
 class SeekView(discord.ui.View):
-    def __init__(self, session: PlayerSession) -> None:
+    def __init__(self, session: PlayerSession, responses: Responses) -> None:
         super().__init__(timeout=120)
         self.session = session
+        self.responses = responses
         self.message: discord.Message | None = None
         self.ticker: asyncio.Task[None] | None = None
         for delta, label in ((-60, "−60s"), (-15, "−15s"), (15, "+15s"), (60, "+60s")):
@@ -175,6 +198,9 @@ class SeekView(discord.ui.View):
 
         close.callback = close_view
         self.add_item(close)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await allowed_interaction(self.responses, interaction)
 
     def embed(self) -> discord.Embed:
         track = self.session.state.current
