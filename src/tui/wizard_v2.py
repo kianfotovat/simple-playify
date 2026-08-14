@@ -1,0 +1,184 @@
+"""Atomic, live-verified configuration wizard."""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+import discord
+from rich.console import Console
+from rich.prompt import Confirm, Prompt
+
+USER_AGENT = "Playify/2.1 (+https://github.com/kianfotovat/simple-playify)"
+
+
+def load_env(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key, value = stripped.split("=", 1)
+                values[key.strip()] = value.strip()
+    return values
+
+
+def save_env(path: Path, updates: dict[str, str]) -> None:
+    """Replace known assignments while retaining comments and unknown keys."""
+
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    remaining = dict(updates)
+    output: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in remaining:
+                output.append(f"{key}={remaining.pop(key)}")
+                continue
+        output.append(line)
+    if remaining:
+        if output and output[-1]:
+            output.append("")
+        output.extend(f"{key}={value}" for key, value in remaining.items())
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _json_request(request: urllib.request.Request, timeout: int = 15) -> dict:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
+def verify_discord(token: str) -> tuple[str, str | None]:
+    request = urllib.request.Request(
+        "https://discord.com/api/v10/users/@me",
+        headers={"Authorization": f"Bot {token}", "User-Agent": USER_AGENT},
+    )
+    try:
+        data = _json_request(request)
+        return "valid", str(data.get("id")) if data.get("id") else None
+    except urllib.error.HTTPError as exc:
+        return ("invalid", None) if exc.code in {401, 403} else ("network", None)
+    except (OSError, ValueError):
+        return "network", None
+
+
+def verify_spotify(client_id: str, client_secret: str) -> str:
+    body = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
+    credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    request = urllib.request.Request(
+        "https://accounts.spotify.com/api/token",
+        data=body,
+        headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    try:
+        data = _json_request(request)
+        return "valid" if data.get("access_token") else "invalid"
+    except urllib.error.HTTPError as exc:
+        return "invalid" if exc.code in {400, 401, 403} else "network"
+    except (OSError, ValueError):
+        return "network"
+
+
+def invite_url(application_id: str, *, stage_moderation: bool) -> str:
+    permissions = discord.Permissions.none()
+    permissions.view_channel = True
+    permissions.send_messages = True
+    permissions.embed_links = True
+    permissions.read_message_history = True
+    permissions.connect = True
+    permissions.speak = True
+    permissions.use_application_commands = True
+    permissions.mute_members = stage_moderation
+    return (
+        "https://discord.com/oauth2/authorize?"
+        + urllib.parse.urlencode(
+            {
+                "client_id": application_id,
+                "scope": "bot applications.commands",
+                "permissions": permissions.value,
+            }
+        )
+    )
+
+
+def run_wizard(console: Console, project_root: Path) -> bool:
+    path = project_root / ".env"
+    current = load_env(path)
+    console.print("\n[title]Bot configuration[/]")
+    console.print("Values are hidden while you type. Existing comments and unknown keys are preserved.")
+    token = Prompt.ask(
+        "Discord bot token (Enter keeps the current value)",
+        password=True,
+        default="" if not current.get("DISCORD_TOKEN") else "__KEEP__",
+        show_default=False,
+    )
+    if token == "__KEEP__":
+        token = current.get("DISCORD_TOKEN", "")
+    if not token:
+        console.print("[error]A Discord token is required.[/]")
+        return False
+    status, application_id = verify_discord(token)
+    if status == "invalid":
+        console.print("[error]Discord rejected that token; nothing was saved.[/]")
+        return False
+    if status == "network" and not Confirm.ask(
+        "Discord could not be reached. Save the unverified token anyway?", default=False
+    ):
+        return False
+
+    spotify_id = Prompt.ask(
+        "Spotify client ID (optional; Enter keeps current)",
+        password=True,
+        default="__KEEP__" if current.get("SPOTIFY_CLIENT_ID") else "",
+        show_default=False,
+    )
+    spotify_secret = Prompt.ask(
+        "Spotify client secret (optional; Enter keeps current)",
+        password=True,
+        default="__KEEP__" if current.get("SPOTIFY_CLIENT_SECRET") else "",
+        show_default=False,
+    )
+    if spotify_id == "__KEEP__":
+        spotify_id = current.get("SPOTIFY_CLIENT_ID", "")
+    if spotify_secret == "__KEEP__":
+        spotify_secret = current.get("SPOTIFY_CLIENT_SECRET", "")
+    if bool(spotify_id) != bool(spotify_secret):
+        console.print("[error]Spotify client ID and secret must be set or cleared together.[/]")
+        return False
+    if spotify_id:
+        spotify_status = verify_spotify(spotify_id, spotify_secret)
+        if spotify_status == "invalid":
+            console.print("[error]Spotify rejected those credentials; nothing was saved.[/]")
+            return False
+        if spotify_status == "network" and not Confirm.ask(
+            "Spotify could not be reached. Save the unverified pair anyway?", default=False
+        ):
+            return False
+
+    save_env(
+        path,
+        {
+            "DISCORD_TOKEN": token,
+            "SPOTIFY_CLIENT_ID": spotify_id,
+            "SPOTIFY_CLIENT_SECRET": spotify_secret,
+        },
+    )
+    console.print("[success]Configuration saved atomically. Restart the bot to apply it.[/]")
+    if application_id:
+        stage = Confirm.ask("Include Stage moderation permission in the invite?", default=False)
+        url = invite_url(application_id, stage_moderation=stage)
+        console.print("\nInvite URL (copy it; Playify will not open a browser):")
+        console.print(f"[link={url}]{url}[/link]")
+    return True
