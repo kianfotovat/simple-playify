@@ -251,16 +251,9 @@ class PlayerSession:
                 await self._play_current(self.state.position)
             elif resume and self.state.queue:
                 await self._advance(force=True)
-            elif not resume and self.state.current:
-                await self._play_current(self.state.position)
-                if self.voice:
-                    self.voice.pause()
-                self.state.paused = True
-                self.state.position = self.start_offset
-                self.playback_started_at = None
-                await self.changed("reconnected_paused")
             elif not resume:
                 self.state.paused = True
+                self.playback_started_at = None
                 await self.changed("reconnected_paused")
         except Exception:
             await self.become_dormant("voice_start_failed")
@@ -451,14 +444,19 @@ class PlayerSession:
         async with self.lock:
             if self.state.dormant:
                 return False
-            if not self.voice or not self.voice.is_paused():
+            if not self.voice:
                 return False
-            self.voice.resume()
-            self.start_offset = self.state.position
-            self.playback_started_at = time.monotonic()
-            self.state.paused = False
-            await self.changed("resumed")
-            return True
+            if self.voice.is_paused():
+                self.voice.resume()
+                self.start_offset = self.state.position
+                self.playback_started_at = time.monotonic()
+                self.state.paused = False
+                await self.changed("resumed")
+                return True
+            if self.state.paused and self.state.current and self.voice.is_connected():
+                await self._play_current(self.state.position)
+                return True
+            return False
 
     async def seek(self, position: float, *, clamp: bool = True) -> float:
         async with self.lock:
