@@ -69,17 +69,29 @@ def _start_bot(console: Console, bot: BotProcess) -> str:
             return "stopped"
 
 
+def _perform_update(console: Console, status, action: str) -> None:
+    from .updater_v2 import install_update, rollback_update
+
+    operation = rollback_update if action == "rollback" else install_update
+    success, detail = operation(PROJECT_ROOT, status)
+    verb = "Rolled back to" if action == "rollback" else "Updated to"
+    console.print(
+        f"[{'success' if success else 'error'}]"
+        f"{verb + ' ' + detail if success else 'Operation failed: ' + detail}[/]"
+    )
+    wait_for_key(console, "Press any key or Esc to restart the launcher…")
+    raise SystemExit(0 if success else 1)
+
+
 def _preflight_update(console: Console) -> None:
     if not Config.get("updates_enabled", True):
         return
-    try:
-        from .updater_v2 import choose_update, inspect_update
-    except ImportError:
-        return
+    from .updater_v2 import choose_update, inspect_update
+
     status = inspect_update(PROJECT_ROOT)
     action = choose_update(console, status)
-    if action == "install":
-        console.print("[warning]Accept the pending updater safety confirmation, then use U from the dashboard.[/]")
+    if action != "skip":
+        _perform_update(console, status, action)
 
 
 def main() -> None:
@@ -136,22 +148,14 @@ def main() -> None:
                     bot.metrics["restart_required"] = "Bot"
                 wait_for_key(console)
             elif action == "update":
-                try:
-                    from .updater_v2 import choose_update, inspect_update, install_update
-                except ImportError:
-                    console.print("[warning]The updater install path is awaiting explicit safety approval.[/]")
-                    wait_for_key(console)
-                    continue
+                from .updater_v2 import choose_update, inspect_update
+
                 status = inspect_update(PROJECT_ROOT, manual=True)
-                if choose_update(console, status) == "install":
+                update_action = choose_update(console, status)
+                if update_action != "skip":
                     if not _stop_with_choice(console, bot):
                         continue
-                    success, detail = install_update(PROJECT_ROOT, status)
-                    console.print(
-                        f"[{'success' if success else 'error'}]{'Updated to' if success else 'Update failed:'} {detail}[/]"
-                    )
-                    wait_for_key(console, "Press any key or Esc to restart the launcher…")
-                    raise SystemExit(0 if success else 1)
+                    _perform_update(console, status, update_action)
             elif action == "restart":
                 if not Confirm.ask("Restart the bot now?", default=False):
                     continue

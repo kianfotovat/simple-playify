@@ -40,6 +40,8 @@ DEFAULT_INSTALLATION: dict[str, Any] = {
     "last_ffmpeg_check": None,
     "update_remind_after": None,
     "ignored_update_sha": None,
+    "previous_update_sha": None,
+    "last_update_sha": None,
     "pending_environment": None,
 }
 
