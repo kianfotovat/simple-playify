@@ -49,8 +49,10 @@ class PlayifyClient(discord.Client):
         super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions.none())
         self.tree = PlayifyCommandTree(self)
         self.storage = Storage()
-        self.http = HttpClient()
-        self.extractor = Extractor(self.http)
+        # ``discord.Client.http`` is Discord.py's authentication/REST client.
+        # Keep Playify's media client under a distinct name so login can use it.
+        self.media_http = HttpClient()
+        self.extractor = Extractor(self.media_http)
         self.server_settings: dict[int, ServerSettings] = {}
         self.responses = Responses(self, self.storage)
         self.players = PlayerManager(
@@ -67,7 +69,7 @@ class PlayifyClient(discord.Client):
 
     async def setup_hook(self) -> None:
         await self.storage.open()
-        await self.http.open()
+        await self.media_http.open()
         self.server_settings = await self.storage.load_servers()
         await self.players.restore()
 
@@ -254,7 +256,7 @@ class PlayifyClient(discord.Client):
         await self.controllers.shutdown()
         await self.responses.close()
         await self.extractor.close()
-        await self.http.close()
+        await self.media_http.close()
         await self.storage.close()
         await super().close()
 
