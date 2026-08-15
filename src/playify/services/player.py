@@ -552,7 +552,11 @@ class PlayerSession:
 
     async def shuffle(self) -> int:
         async with self.lock:
-            random.shuffle(self.state.queue)
+            original = [track.occurrence_id for track in self.state.queue]
+            while len(self.state.queue) > 1 and [
+                track.occurrence_id for track in self.state.queue
+            ] == original:
+                random.shuffle(self.state.queue)
             self.priority_anchor.clear()
             await self.changed("queue_shuffled")
             return len(self.state.queue)
