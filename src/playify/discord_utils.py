@@ -144,6 +144,16 @@ class Responses:
         )
         self._spawn_deletion(sent.channel.id, sent.id, delete_after, lifetime)
 
+    async def cancel_expiration(self, sent: discord.Message) -> None:
+        """Forget a scheduled expiration after a message was deleted early."""
+
+        key = (sent.channel.id, sent.id)
+        task = self.tasks.pop(key, None)
+        if task and task is not asyncio.current_task() and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await self.storage.remove_deletion_job(*key)
+
     def _spawn_deletion(
         self, channel_id: int, message_id: int, delete_after: datetime, kind: str
     ) -> None:

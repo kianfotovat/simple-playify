@@ -193,8 +193,18 @@ class SeekView(discord.ui.View):
         close = discord.ui.Button(label="Close", style=discord.ButtonStyle.danger)
 
         async def close_view(interaction: discord.Interaction) -> None:
+            await interaction.response.defer()
             self.stop()
-            await interaction.response.edit_message(view=None)
+            await self.stop_ticker()
+            sent = interaction.message or self.message
+            if sent is not None:
+                try:
+                    await sent.delete()
+                except discord.NotFound:
+                    pass
+                await self.responses.cancel_expiration(sent)
+            else:
+                await interaction.delete_original_response()
 
         close.callback = close_view
         self.add_item(close)
@@ -214,8 +224,10 @@ class SeekView(discord.ui.View):
     def start_ticker(self) -> None:
         async def tick() -> None:
             try:
-                while not self.is_finished():
+                while True:
                     await asyncio.sleep(2)
+                    if self.is_finished():
+                        break
                     if self.message:
                         await self.message.edit(embed=self.embed(), view=self)
             except (asyncio.CancelledError, discord.NotFound, discord.Forbidden):
@@ -223,9 +235,15 @@ class SeekView(discord.ui.View):
 
         self.ticker = asyncio.create_task(tick(), name=f"seek-view-{self.session.guild_id}")
 
+    async def stop_ticker(self) -> None:
+        ticker = self.ticker
+        self.ticker = None
+        if ticker and ticker is not asyncio.current_task() and not ticker.done():
+            ticker.cancel()
+            await asyncio.gather(ticker, return_exceptions=True)
+
     async def on_timeout(self) -> None:
-        if self.ticker:
-            self.ticker.cancel()
+        await self.stop_ticker()
 
 
 class ChannelPaginator(discord.ui.View):
