@@ -71,13 +71,16 @@ class Responses:
         view: discord.ui.View | None = None,
         lifetime: Lifetime = "success",
     ) -> discord.InteractionMessage | discord.WebhookMessage:
-        kwargs = {
-            "content": content,
-            "embed": embed,
-            "view": view,
+        kwargs: dict[str, Any] = {
             "silent": True,
             "allowed_mentions": discord.AllowedMentions.none(),
         }
+        if content is not None:
+            kwargs["content"] = content
+        if embed is not None:
+            kwargs["embed"] = embed
+        if view is not None:
+            kwargs["view"] = view
         if interaction.response.is_done():
             sent = await interaction.followup.send(wait=True, **kwargs)
         else:
