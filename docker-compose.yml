@@ -1,7 +1,0 @@
-services:
-  playify-discord-bot:
-    env_file: .env
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped

@@ -14,7 +14,7 @@ import psutil
 from discord import app_commands
 from dotenv import load_dotenv
 
-from .commands_v2 import CommandSuite
+from .commands import CommandSuite
 from .config import Config
 from .constants import PROJECT_ROOT, display_version
 from .discord_utils import Responses
@@ -25,7 +25,7 @@ from .services.extractor import Extractor
 from .services.http_client import HttpClient
 from .services.player import PlayerManager, PlayerSession, _human_count, ffmpeg_path
 from .storage import Storage
-from .ui.controller_v2 import ControllerManager
+from .ui.controller import ControllerManager
 
 LOGGER = logging.getLogger(__name__)
 

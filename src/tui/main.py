@@ -13,13 +13,13 @@ from src.playify.config import Config
 from src.playify.constants import PROJECT_ROOT, display_version
 from src.playify.logging_utils import configure_logging
 
-from .bot_process_v2 import BotProcess
-from .dashboard_v2 import run_dashboard
+from .bot_process import BotProcess
+from .dashboard import run_dashboard
 from .key_input import wait_for_key
 from .maintenance import locate_ffmpeg, managed_ffmpeg_due, install_ffmpeg, run_maintenance
-from .settings_v2 import run_settings
+from .settings import run_settings
 from .theme import PLAYIFY_THEME
-from .wizard_v2 import load_env, run_wizard
+from .wizard import load_env, run_wizard
 
 
 def _console() -> Console:
@@ -70,7 +70,7 @@ def _start_bot(console: Console, bot: BotProcess) -> str:
 
 
 def _perform_update(console: Console, status, action: str) -> None:
-    from .updater_v2 import install_update, rollback_update
+    from .updater import install_update, rollback_update
 
     operation = rollback_update if action == "rollback" else install_update
     success, detail = operation(PROJECT_ROOT, status)
@@ -86,7 +86,7 @@ def _perform_update(console: Console, status, action: str) -> None:
 def _preflight_update(console: Console) -> None:
     if not Config.get("updates_enabled", True):
         return
-    from .updater_v2 import choose_update, inspect_update
+    from .updater import choose_update, inspect_update
 
     status = inspect_update(PROJECT_ROOT)
     action = choose_update(console, status)
@@ -148,7 +148,7 @@ def main() -> None:
                     bot.metrics["restart_required"] = "Bot"
                 wait_for_key(console)
             elif action == "update":
-                from .updater_v2 import choose_update, inspect_update
+                from .updater import choose_update, inspect_update
 
                 status = inspect_update(PROJECT_ROOT, manual=True)
                 update_action = choose_update(console, status)
