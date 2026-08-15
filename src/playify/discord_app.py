@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 import discord
@@ -16,7 +17,7 @@ from dotenv import load_dotenv
 
 from .commands import CommandSuite
 from .config import Config
-from .constants import PROJECT_ROOT, display_version
+from .constants import PROJECT_ROOT, TEMP_DIR, display_version
 from .discord_utils import Responses
 from .logging_utils import configure_logging
 from .messages import message
@@ -65,6 +66,7 @@ class PlayifyClient(discord.Client):
         self.started_at = time.monotonic()
         self.ready_task: asyncio.Task[None] | None = None
         self.heartbeat_task: asyncio.Task[None] | None = None
+        self.control_task: asyncio.Task[None] | None = None
         self._closing = False
 
     async def setup_hook(self) -> None:
@@ -72,6 +74,12 @@ class PlayifyClient(discord.Client):
         await self.media_http.open()
         self.server_settings = await self.storage.load_servers()
         await self.players.restore()
+        control_id = os.getenv("PLAYIFY_CONTROL_ID", "").strip().lower()
+        if len(control_id) == 32 and all(character in "0123456789abcdef" for character in control_id):
+            control_path = TEMP_DIR / f"control-{control_id}.stop"
+            self.control_task = asyncio.create_task(
+                self._watch_control_file(control_path), name="supervisor-control"
+            )
 
     async def on_ready(self) -> None:
         if self.ready_task is None:
@@ -171,6 +179,21 @@ class PlayifyClient(discord.Client):
                 LOGGER.exception("Could not emit heartbeat")
             await asyncio.sleep(30)
 
+    async def _watch_control_file(self, path: Path) -> None:
+        try:
+            while not self.is_closed():
+                if path.exists():
+                    path.unlink(missing_ok=True)
+                    await self.close()
+                    return
+                await asyncio.sleep(0.25)
+        except asyncio.CancelledError:
+            pass
+        except OSError:
+            LOGGER.exception("Supervisor control file failed")
+        finally:
+            path.unlink(missing_ok=True)
+
     async def handle_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
@@ -250,7 +273,7 @@ class PlayifyClient(discord.Client):
         current = asyncio.current_task()
         lifecycle_tasks = [
             task
-            for task in (self.ready_task, self.heartbeat_task)
+            for task in (self.ready_task, self.heartbeat_task, self.control_task)
             if task is not None and task is not current and not task.done()
         ]
         for task in lifecycle_tasks:

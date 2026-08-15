@@ -8,6 +8,7 @@ import signal
 import subprocess
 import threading
 import time
+import uuid
 from collections import Counter, deque
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ class BotProcess:
         self.reader: threading.Thread | None = None
         self.started_at: float | None = None
         self.last_exit_code: int | None = None
+        self.control_file: Path | None = None
         self.crash_count = 0
         self._capture = False
         self._metric_cache_at = 0.0
@@ -55,9 +57,15 @@ class BotProcess:
     def start(self) -> None:
         if self.is_running:
             return
+        self._cleanup_control_file()
+        control_id = uuid.uuid4().hex
+        control_directory = self.project_root / "data" / "tmp"
+        control_directory.mkdir(parents=True, exist_ok=True)
+        self.control_file = control_directory / f"control-{control_id}.stop"
         environment = os.environ.copy()
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment["PLAYIFY_CONTROL_ID"] = control_id
         environment["PATH"] = str(self.project_root / "bin") + os.pathsep + environment.get("PATH", "")
         flags = 0
         if os.name == "nt":
@@ -103,6 +111,7 @@ class BotProcess:
                 self.last_exit_code = self.process.poll()
                 if self.last_exit_code not in {None, 0}:
                     self.crash_count += 1
+            self._cleanup_control_file()
 
     def _event(self, payload: dict[str, Any]) -> None:
         kind = str(payload.get("type", "unknown"))
@@ -135,6 +144,12 @@ class BotProcess:
     def request_stop(self) -> None:
         if not self.process or not self.is_running:
             return
+        if self.control_file:
+            try:
+                self.control_file.write_text("stop\n", encoding="utf-8")
+                return
+            except OSError:
+                pass
         if os.name == "nt":
             self.process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
@@ -147,6 +162,7 @@ class BotProcess:
             self.process.wait(timeout=timeout)
             self.last_exit_code = self.process.returncode
             self._capture = False
+            self._cleanup_control_file()
             return True
         except subprocess.TimeoutExpired:
             return False
@@ -157,6 +173,12 @@ class BotProcess:
             self.process.wait(timeout=5)
         self._capture = False
         self.last_exit_code = self.process.returncode if self.process else self.last_exit_code
+        self._cleanup_control_file()
+
+    def _cleanup_control_file(self) -> None:
+        if self.control_file:
+            self.control_file.unlink(missing_ok=True)
+            self.control_file = None
 
     def restart(self) -> str:
         self.request_stop()
