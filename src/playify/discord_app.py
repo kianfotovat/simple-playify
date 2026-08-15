@@ -135,7 +135,12 @@ class PlayifyClient(discord.Client):
         )
 
     def _emit(self, payload: dict[str, Any]) -> None:
-        print("PLAYIFY_EVENT " + json.dumps(payload, ensure_ascii=False), flush=True)
+        try:
+            print("PLAYIFY_EVENT " + json.dumps(payload, ensure_ascii=False), flush=True)
+        except (OSError, ValueError):
+            # The bot may briefly outlive an interrupted TUI or terminal pipe.
+            # File logging and Discord operation should continue independently.
+            pass
 
     async def _heartbeat(self) -> None:
         process = psutil.Process()

@@ -55,7 +55,13 @@ class RedactingFormatter(logging.Formatter):
 class JsonStdoutHandler(logging.Handler):
     """Emit prefixed JSON that the parent TUI can parse without ambiguity."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.available = True
+
     def emit(self, record: logging.LogRecord) -> None:
+        if not self.available:
+            return
         try:
             payload = {
                 "type": "log",
@@ -65,6 +71,8 @@ class JsonStdoutHandler(logging.Handler):
             }
             sys.stdout.write("PLAYIFY_EVENT " + json.dumps(payload, ensure_ascii=False) + "\n")
             sys.stdout.flush()
+        except (OSError, ValueError):
+            self.available = False
         except Exception:
             self.handleError(record)
 
