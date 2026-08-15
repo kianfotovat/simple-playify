@@ -6,10 +6,3 @@ logs/
 __pycache__/
 *.py[cod]
 .DS_Store
-
-# Old local layouts are deliberately not migrated.
-/app/
-/config.json
-/playify_state.db
-/cookies*.txt
-/ffmpeg.exe
