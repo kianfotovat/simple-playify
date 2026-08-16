@@ -90,6 +90,31 @@ def _direct_extension(url: str) -> str:
     return Path(urlsplit(url).path).suffix.lower()
 
 
+def _thumbnail_url(info: dict[str, Any]) -> str | None:
+    thumbnail = info.get("thumbnail")
+    if isinstance(thumbnail, str) and _is_url(thumbnail):
+        return thumbnail
+
+    candidates: list[tuple[float, int, str]] = []
+    thumbnails = info.get("thumbnails")
+    if not isinstance(thumbnails, list):
+        return None
+    for index, candidate in enumerate(thumbnails):
+        if not isinstance(candidate, dict):
+            continue
+        url = candidate.get("url")
+        if not isinstance(url, str) or not _is_url(url):
+            continue
+        try:
+            area = float(candidate.get("width") or 0) * float(
+                candidate.get("height") or 0
+            )
+        except (TypeError, ValueError):
+            area = 0
+        candidates.append((area, index, url))
+    return max(candidates)[2] if candidates else None
+
+
 def public_canonical_link(track: Track) -> str | None:
     """Return only links safe to expose as clickable Discord URLs."""
 
@@ -212,7 +237,7 @@ class Extractor:
             uploader=str(info.get("uploader") or info.get("artist") or "Unknown artist"),
             duration=float(info["duration"]) if info.get("duration") is not None else None,
             is_live=bool(info.get("is_live") or info.get("live_status") == "is_live"),
-            thumbnail=info.get("thumbnail"),
+            thumbnail=_thumbnail_url(info),
             stream_url=stream_url,
             requested_by=requested_by,
             provenance="autoplay" if provenance == "autoplay" else "user",
