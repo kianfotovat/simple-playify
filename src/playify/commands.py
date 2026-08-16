@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 
 from .constants import display_version
-from .discord_utils import duration_text, format_time, safe_text
+from .discord_utils import format_time, safe_text
 from .messages import message
 from .models import ServerSettings, Track
 from .services.player import PlayerSession, _human_count
@@ -65,20 +65,6 @@ def parse_timestamp(value: str) -> float:
     if any(number < 0 for number in numbers) or any(number >= 60 for number in numbers[1:]):
         raise ValueError("format")
     return float(sum(number * (60 ** index) for index, number in enumerate(reversed(numbers))))
-
-
-def search_result_embed(track: Track, index: int) -> discord.Embed:
-    embed = discord.Embed(
-        title=f"{index + 1}. {safe_text(track.title, 100)}",
-        description=(
-            f"{safe_text(track.uploader, 60)} • "
-            f"{duration_text(track.duration, live=track.is_live)}"
-        ),
-        color=0x5865F2,
-    )
-    if track.thumbnail:
-        embed.set_thumbnail(url=track.thumbnail)
-    return embed
 
 
 class CommandSuite:
@@ -384,12 +370,8 @@ class CommandSuite:
                 )
 
             view = SearchView(tracks, picked, self.app.responses)
-            embeds = [
-                search_result_embed(track, index)
-                for index, track in enumerate(tracks[:10])
-            ]
             await progress.edit(
-                content="## Search Results", embeds=embeds, view=view
+                content=None, embed=None, attachments=[], view=view
             )
             view.message = progress
             await self.app.responses.expire(progress, "interactive")

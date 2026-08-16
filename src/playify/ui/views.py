@@ -43,7 +43,7 @@ async def active_interaction(
 
 
 async def dismiss_message(
-    view: discord.ui.View,
+    view: discord.ui.View | discord.ui.LayoutView,
     responses: Responses,
     interaction: discord.Interaction,
     message_pointer: discord.Message | None,
@@ -211,7 +211,7 @@ class QueueView(discord.ui.View):
         return embed
 
 
-class SearchView(discord.ui.View):
+class SearchView(discord.ui.LayoutView):
     def __init__(
         self,
         tracks: Sequence[Track],
@@ -222,6 +222,26 @@ class SearchView(discord.ui.View):
         self.tracks = list(tracks[:10])
         self.responses = responses
         self.message: discord.Message | None = None
+        container = discord.ui.Container(accent_color=0x5865F2)
+        container.add_item(discord.ui.TextDisplay("## Search Results"))
+        for index, track in enumerate(self.tracks):
+            details = (
+                f"**{index + 1}. {safe_text(track.title, 100)}**\n"
+                f"{safe_text(track.uploader, 60)} • "
+                f"{duration_text(track.duration, live=track.is_live)}"
+            )
+            if track.thumbnail:
+                container.add_item(
+                    discord.ui.Section(
+                        details,
+                        accessory=discord.ui.Thumbnail(
+                            track.thumbnail,
+                            description=f"Artwork for {safe_text(track.title, 80)}",
+                        ),
+                    )
+                )
+            else:
+                container.add_item(discord.ui.TextDisplay(details))
         select = discord.ui.Select(
             placeholder="Choose a result",
             options=[
@@ -242,16 +262,15 @@ class SearchView(discord.ui.View):
             await on_pick(interaction, self.tracks[int(select.values[0])])
 
         select.callback = selected
-        self.add_item(select)
-        close = discord.ui.Button(
-            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
-        )
+        container.add_item(discord.ui.ActionRow(select))
+        close = discord.ui.Button(label=CLOSE_LABEL, style=discord.ButtonStyle.danger)
 
         async def close_view(interaction: discord.Interaction) -> None:
             await dismiss_message(self, self.responses, interaction, self.message)
 
         close.callback = close_view
-        self.add_item(close)
+        container.add_item(discord.ui.ActionRow(close))
+        self.add_item(container)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await active_interaction(self.responses, interaction)
