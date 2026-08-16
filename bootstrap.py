@@ -12,6 +12,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from src.playify.messages import message
+
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
 DATA = ROOT / "data"
@@ -24,8 +26,8 @@ IMPORT_CHECK = (
 )
 
 
-def fail(message: str) -> "NoReturn":
-    print(f"[Playify] {message}", file=sys.stderr)
+def fail(detail: str) -> "NoReturn":
+    print(message("bootstrap.output", detail=detail), file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -105,7 +107,7 @@ def dependency_state() -> tuple[bool, bool, dict]:
 def _safe_cleanup(path: Path) -> None:
     resolved = path.resolve()
     if resolved.parent != ROOT or not resolved.name.startswith(".venv-"):
-        fail("Refusing to clean an unexpected environment path.")
+        fail(message("bootstrap.cleanup_refused"))
     shutil.rmtree(resolved)
 
 
@@ -115,7 +117,11 @@ def stage_environment(metadata: dict) -> None:
     for path in (candidate, backup):
         if path.exists():
             _safe_cleanup(path)
-    print("[Playify] Building a validated Python environment…")
+    print(
+        message(
+            "bootstrap.output", detail=message("bootstrap.building")
+        )
+    )
     try:
         subprocess.run([sys.executable, "-m", "venv", str(candidate)], check=True, cwd=ROOT)
         python = venv_python(candidate)
@@ -125,7 +131,7 @@ def stage_environment(metadata: dict) -> None:
             cwd=ROOT,
         )
         if not environment_valid(candidate):
-            fail("The staged environment failed validation; the active environment is unchanged.")
+            fail(message("bootstrap.stage_failed"))
         if VENV.exists():
             VENV.replace(backup)
         candidate.replace(VENV)
@@ -164,7 +170,7 @@ def stage_pending_environment() -> Path:
             cwd=ROOT,
         )
         if not environment_valid(pending):
-            fail("The staged environment failed validation; the active environment is unchanged.")
+            fail(message("bootstrap.stage_failed"))
     except BaseException:
         if pending.exists():
             _safe_cleanup(pending)
@@ -211,17 +217,21 @@ def promote_pending(metadata: dict) -> dict:
 
 def main() -> None:
     if not supported_host():
-        fail("Playify V2 supports Windows or Linux on x86-64 only.")
+        fail(message("bootstrap.host_unsupported"))
     if sys.version_info[:2] not in SUPPORTED:
-        fail("Playify requires Python 3.12, 3.13, or 3.14.")
+        fail(message("bootstrap.python_unsupported"))
     if not REQUIREMENTS.is_file():
-        fail("requirements.txt is missing.")
+        fail(message("bootstrap.requirements_missing"))
     metadata = promote_pending(load_metadata())
     mandatory, stale, metadata = dependency_state()
     if mandatory:
         stage_environment(metadata)
     elif stale:
-        answer = input("[Playify] Dependencies have not been checked for 30 days. Refresh now? [Y/n] ").strip().lower()
+        answer = input(
+            message(
+                "bootstrap.output", detail=message("bootstrap.dependencies_due")
+            )
+        ).strip().lower()
         if answer in {"", "y", "yes"}:
             stage_environment(metadata)
         else:
@@ -229,7 +239,7 @@ def main() -> None:
             save_metadata(metadata)
     python = venv_python()
     if not environment_valid():
-        fail("The managed .venv is unavailable after setup.")
+        fail(message("bootstrap.venv_unavailable"))
     raise SystemExit(subprocess.call([str(python), "-m", "src.tui"], cwd=ROOT))
 
 
