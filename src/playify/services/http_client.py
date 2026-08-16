@@ -18,14 +18,8 @@ from urllib.parse import urljoin, urlsplit
 import aiohttp
 
 from ..config import Config, Installation
-from ..constants import HTTP_USER_AGENT
 
 LOGGER = logging.getLogger(__name__)
-
-CHROME_STABLE_VERSION_URL = "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE"
-FALLBACK_CHROME_MAJOR = 151
-CHROME_VERSION_TIMEOUT_SECONDS = 5
-
 
 def browser_user_agent(chrome_major: int) -> str:
     """Construct Chrome's reduced desktop user-agent string."""
@@ -34,50 +28,6 @@ def browser_user_agent(chrome_major: int) -> str:
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         f"Chrome/{chrome_major}.0.0.0 Safari/537.36"
     )
-
-
-def cached_chrome_major() -> int:
-    value = Installation.get("last_chrome_major", FALLBACK_CHROME_MAJOR)
-    if isinstance(value, int) and 100 <= value <= 999:
-        return value
-    return FALLBACK_CHROME_MAJOR
-
-
-async def current_browser_user_agent() -> str:
-    """Resolve the current stable Chrome major without making startup depend on it."""
-    chrome_major = cached_chrome_major()
-    try:
-        timeout = aiohttp.ClientTimeout(total=CHROME_VERSION_TIMEOUT_SECONDS)
-        async with (
-            aiohttp.ClientSession(
-                timeout=timeout,
-                headers={"User-Agent": HTTP_USER_AGENT},
-                raise_for_status=True,
-                trust_env=False,
-            ) as session,
-            session.get(CHROME_STABLE_VERSION_URL) as response,
-        ):
-            version = (await response.text()).strip()
-        parts = version.split(".")
-        if len(parts) != 4 or not all(part.isdigit() for part in parts):
-            raise ValueError(f"invalid Chrome version: {version!r}")
-        resolved_major = int(parts[0])
-        if not 100 <= resolved_major <= 999:
-            raise ValueError(f"invalid Chrome major version: {resolved_major}")
-        chrome_major = resolved_major
-        if chrome_major != cached_chrome_major():
-            try:
-                Installation.set("last_chrome_major", chrome_major)
-            except OSError as exc:
-                LOGGER.warning("Could not cache Chrome %s: %s", chrome_major, exc)
-        LOGGER.info("Using Chrome %s user agent from the stable release feed", chrome_major)
-    except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
-        LOGGER.warning(
-            "Could not resolve the stable Chrome version; using Chrome %s: %s",
-            chrome_major,
-            exc,
-        )
-    return browser_user_agent(chrome_major)
 
 
 TRANSIENT_STATUS = {408, 425, 429, 500, 502, 503, 504}
@@ -232,15 +182,11 @@ class HttpClient:
     def __init__(self) -> None:
         self.session: aiohttp.ClientSession | None = None
         self.semaphore = asyncio.Semaphore(configured_http_concurrency())
-        self.browser_user_agent = browser_user_agent(cached_chrome_major())
-        self._browser_user_agent_resolved = False
+        self.browser_user_agent = browser_user_agent(Installation.get("last_chrome_major"))
 
     async def open(self) -> None:
         if self.session is not None and not self.session.closed:
             return
-        if not self._browser_user_agent_resolved:
-            self.browser_user_agent = await current_browser_user_agent()
-            self._browser_user_agent_resolved = True
         family = socket.AF_INET if Config.get("ip_mode") == "ipv4" else socket.AF_UNSPEC
         connector = aiohttp.TCPConnector(family=family, ttl_dns_cache=60)
         self.session = aiohttp.ClientSession(

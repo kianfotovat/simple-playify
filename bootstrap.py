@@ -9,6 +9,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import urllib.request
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,9 @@ from typing import Any, NoReturn
 from uuid import uuid4
 
 from src.playify.constants import (
+    CHROME_STABLE_VERSION_URL,
+    DEFAULT_CHROME_MAJOR,
+    HTTP_USER_AGENT,
     LAUNCH_STAGE_ENV,
     RUNTIME_PREFIX_ENV,
     TUI_LAUNCH_STAGE,
@@ -63,7 +67,7 @@ INSTALLATION_DEFAULTS: dict[str, Any] = {
     "ignored_update_sha": None,
     "previous_update_sha": None,
     "last_update_sha": None,
-    "last_chrome_major": 151,
+    "last_chrome_major": DEFAULT_CHROME_MAJOR,
     "requirements_hash": None,
     "python_version": None,
     "runtime_mode": None,
@@ -224,6 +228,40 @@ def load_metadata() -> dict[str, Any]:
 
 def save_metadata(value: Mapping[str, Any]) -> None:
     _atomic_json_write(INSTALLATION, value)
+
+
+def _chrome_major(version: str) -> int:
+    parts = version.strip().split(".")
+    if len(parts) != 4 or not all(part.isdigit() for part in parts):
+        raise ValueError(f"invalid Chrome version: {version!r}")
+    major = int(parts[0])
+    if not 100 <= major <= 999:
+        raise ValueError(f"invalid Chrome major version: {major}")
+    return major
+
+
+def refresh_chrome_major(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Guarantee a valid cached Chrome major before launching Playify."""
+
+    cached = metadata.get("last_chrome_major")
+    chrome_major = cached if type(cached) is int and 100 <= cached <= 999 else DEFAULT_CHROME_MAJOR
+    try:
+        request = urllib.request.Request(CHROME_STABLE_VERSION_URL, headers={"User-Agent": HTTP_USER_AGENT})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            chrome_major = _chrome_major(response.read(64).decode("ascii"))
+    except (OSError, ValueError) as exc:
+        print(
+            message(
+                "bootstrap.output",
+                detail=message(
+                    "bootstrap.chrome_version_failed",
+                    major=chrome_major,
+                    error=exc,
+                ),
+            )
+        )
+    metadata["last_chrome_major"] = chrome_major
+    return metadata
 
 
 def _new_ownership_id(metadata: Mapping[str, Any]) -> str:
@@ -650,6 +688,10 @@ def main() -> None:
 
     runtime, base_python, metadata = select_runtime(metadata)
     _handoff_if_inside_runtime(runtime, base_python)
+    previous_chrome_major = metadata.get("last_chrome_major")
+    metadata = refresh_chrome_major(metadata)
+    if metadata["last_chrome_major"] != previous_chrome_major:
+        save_metadata(metadata)
     mandatory, stale = dependency_state(runtime, metadata)
     if mandatory:
         stage_environment(runtime, base_python, metadata)

@@ -31,6 +31,7 @@ MESSAGES: dict[str, str] = {
     "bootstrap.requirements_missing": "requirements.txt is missing.",
     "bootstrap.data_initialize_failed": "Could not initialize the data files: {error}",
     "bootstrap.data_invalid": "{path} was invalid. It was backed up to {backup} and rebuilt.",
+    "bootstrap.chrome_version_failed": "Could not refresh Chrome version; using Chrome {major}: {error}",
     "bootstrap.dependencies_due": "Dependencies have not been checked for 30 days. Refresh now? [Y/n] ",
     "bootstrap.environment_invalid": "The selected virtual environment is unavailable or incomplete.",
     "bootstrap.runtime_detected": "An active virtual environment was detected:\n{path}",
