@@ -111,21 +111,6 @@ class ControllerView(discord.ui.View):
         async def add(interaction: discord.Interaction) -> None:
             await interaction.response.send_modal(AddTrackModal(self.session, self.manager.responses))
 
-        async def shuffle(interaction: discord.Interaction) -> None:
-            await acknowledge(interaction)
-            await self.session.shuffle()
-
-        async def loop(interaction: discord.Interaction) -> None:
-            await acknowledge(interaction)
-            try:
-                await self.session.toggle_loop()
-            except ValueError:
-                pass
-
-        async def autoplay(interaction: discord.Interaction) -> None:
-            await acknowledge(interaction)
-            await self.session.set_autoplay(not self.session.state.autoplay_enabled)
-
         async def volume_down(interaction: discord.Interaction) -> None:
             await acknowledge(interaction)
             await self.session.set_volume(self.session.state.volume - 10)
@@ -133,16 +118,6 @@ class ControllerView(discord.ui.View):
         async def volume_up(interaction: discord.Interaction) -> None:
             await acknowledge(interaction)
             await self.session.set_volume(self.session.state.volume + 10)
-
-        async def queue(interaction: discord.Interaction) -> None:
-            view = self.manager.queue_view(self.session)
-            sent = await self.manager.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
-            view.message = sent
-
-        async def jump(interaction: discord.Interaction) -> None:
-            view = self.manager.queue_view(self.session, action="jump")
-            sent = await self.manager.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
-            view.message = sent
 
         paused = self.session.state.paused
         self._button(
@@ -197,46 +172,6 @@ class ControllerView(discord.ui.View):
             volume_up,
             custom_id="volume_up",
             emoji="🔊",
-        )
-        self._button(
-            message("controller.button.shuffle"),
-            1,
-            shuffle,
-            custom_id="shuffle",
-            emoji="🔀",
-        )
-        self._button(
-            message("controller.button.loop"),
-            1,
-            loop,
-            custom_id="loop",
-            emoji="🔁",
-            style=(discord.ButtonStyle.success if self.session.state.loop_current else discord.ButtonStyle.secondary),
-        )
-        self._button(
-            message("controller.button.autoplay"),
-            1,
-            autoplay,
-            custom_id="autoplay",
-            emoji="➡️",
-            style=(
-                discord.ButtonStyle.success if self.session.state.autoplay_enabled else discord.ButtonStyle.secondary
-            ),
-        )
-        self._button(
-            message("controller.button.queue"),
-            2,
-            queue,
-            custom_id="queue",
-            emoji="📜",
-            style=discord.ButtonStyle.primary,
-        )
-        self._button(
-            message("button.jump"),
-            2,
-            jump,
-            custom_id="jump",
-            emoji="⤵️",
         )
 
 
@@ -525,8 +460,6 @@ class ControllerManager:
                 session,
                 refresh_view=event
                 in {
-                    "autoplay",
-                    "loop",
                     "paused",
                     "reconnected_paused",
                     "resumed",
