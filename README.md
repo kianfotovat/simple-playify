@@ -2,37 +2,26 @@
   <img src="https://github.com/user-attachments/assets/5c1d5fba-3a34-4ffe-bd46-ef68e1175360" alt="Playify banner" width="900">
 </p>
 
-# Playify 2.1
+# Playify
 
-This fork follows Playify V2's modular Python/TUI architecture while keeping the smaller, self-hosted product direction of the older fork. It is deliberately a personal bot: there is no hosted/public mode, web GUI, Docker image, app bundle, telemetry, or compatibility migration from older database/config layouts.
+Playify is a self-hosted Discord music bot for small servers. Give it a song name or a link, and it joins your voice channel with an interactive player for controlling playback and managing the queue.
 
-## Fork comparison
-
-| Area | Upstream V2 | This fork |
-|---|---|---|
-| Interface | Rich TUI plus upstream setup flows | TUI only, portable `data/` and `bin/` layout |
-| Discord | Slash commands plus legacy/message-content behavior | Slash-only `discord.Client`; no privileged message-content intent |
-| Sources | Broad catalog and upload support | YouTube/Music, SoundCloud, Twitch, Bandcamp, Spotify, Deezer, Apple Music, Tidal, Amazon Music, and validated direct media URLs |
-| Playback | Queue, filters, lyrics/karaoke, uploads, 24/7, autoplay | Queue, dormant resume, autoplay, loop, history, seek, controller; no filters, lyrics, karaoke, uploads, or 24/7 mode |
-| State | Upstream V2 SQLite layout | Fresh async `data/playify.db`; Full or Settings-only persistence |
-| Operations | TUI updater/installer | Owned virtual environment, managed FFmpeg, structured supervision, and confirmation-based Git updates |
-| Documentation | Static documentation site | This README only |
-
-The current version is `2.1.0`. In the TUI and `/status`, Playify also displays the checked-out seven-character Git revision; a non-Git copy displays `unknown`.
+You run Playify on your own Windows or Linux computer. There is no public Playify bot to invite.
 
 <p align="center">
-  <img src="assets/dashboard_preview.svg" alt="Playify TUI dashboard" width="900">
+  <img src="assets/dashboard_preview.svg" alt="Playify dashboard" width="900">
 </p>
 
-## What it does
+## Features
 
-- Streams with yt-dlp and FFmpeg without downloading or caching media.
-- Resolves complete Spotify, Deezer, Apple Music, Tidal, and Amazon Music collections, retaining successful items if a later page fails.
-- Keeps one player and one compact controller in the active Voice/Stage chat per server.
-- Supports ordered concurrent imports, stable queue occurrence IDs, unlimited history, loop, autoplay provenance, and resumable dormant sessions.
-- Restricts direct media to extension-bearing HTTP(S) links (`mp3`, `wav`, `ogg`, `m4a`, `mp4`, `webm`, `flac`) with DNS/redirect checks and an explicit private-network allowlist.
-- Writes rotating local logs with token, credential, and signed-query redaction.
-- Runs a responsive dashboard with runtime metrics, player state, a full log viewer, setup, settings, maintenance, restart, and update controls.
+- Search for music or play links from YouTube, YouTube Music, SoundCloud, Twitch, and Bandcamp.
+- Import tracks, albums, and playlists from Spotify, Deezer, Apple Music, Tidal, and Amazon Music. Playify reads the track information and searches for playable matches.
+- Control playback from a message in Discord with buttons for play, pause, previous, skip, volume, shuffle, loop, autoplay, and more.
+- Search with artwork and choose a result from a menu.
+- Manage the queue with paginated lists and menus for removing tracks or jumping to one.
+- Seek with live progress, ten- and thirty-second controls, or an exact timestamp.
+- Remember the queue and playback state between restarts.
+- Manage setup, settings, logs, updates, and FFmpeg from a terminal dashboard.
 
 ## Requirements
 
@@ -41,18 +30,34 @@ The current version is `2.1.0`. In the TUI and `/status`, Playify also displays 
 - Git
 - A Discord bot token
 
-macOS and ARM builds are not currently promised. You do not need to enable privileged Discord intents.
+Playify can install and manage FFmpeg for you. Spotify credentials are optional.
 
-## Guided installation
+macOS and ARM systems are not currently supported.
 
-Clone this repository so the updater has a real Git checkout:
+## Installation
+
+### 1. Create a Discord bot
+
+Open the [Discord Developer Portal](https://discord.com/developers/applications), create an application, and obtain its token from the **Bot** page. Keep this token private: anyone who has it can control your bot.
+
+Discord also has a [beginner guide to creating a bot](https://docs.discord.com/developers/quick-start/getting-started) if you have not done this before.
+
+### 2. Download Playify
 
 ```text
 git clone https://github.com/kianfotovat/simple-playify.git
 cd simple-playify
 ```
 
-On Windows, double-click `start.bat` or run it from Command Prompt. If no supported Python is present, it can offer to install Python 3.14 with `winget`.
+Using Git is recommended because Playify's built-in updater needs a Git checkout.
+
+### 3. Start Playify
+
+On Windows, double-click `start.bat` or run it from a terminal:
+
+```text
+start.bat
+```
 
 On Linux:
 
@@ -61,70 +66,109 @@ chmod +x start.sh
 ./start.sh
 ```
 
-Both launchers run `bootstrap.py`, the canonical application entrypoint. You may also invoke it directly with a supported Python or alias that command as `playify`:
+The launcher prepares a private Python environment, installs Playify's dependencies, and offers to install FFmpeg if needed.
+
+If Playify detects that you are already inside another virtual environment, choose the project environment unless you intentionally want Playify to take ownership of and rebuild that environment.
+
+### 4. Follow the setup wizard
+
+On the first start, Playify asks for your Discord bot token and checks that it works. Spotify credentials can be entered or left blank.
+
+The wizard then displays an invite link. Open that link, add the bot to your server, and return to the dashboard. Playify will start and register its slash commands automatically.
+
+## Using Playify
+
+Join a voice channel, open that voice channel's text chat, and run:
 
 ```text
-python bootstrap.py
+/play Around the World Daft Punk
 ```
 
-On its first run inside a custom virtual environment, bootstrap asks whether Playify should use the project's `.venv` or adopt the detected environment. Neither choice is preselected. Adoption dedicates the entire detected environment to Playify: a dependency refresh deletes and recreates it with Playify's requirements only, so unrelated packages are not restored. Conda environments and environments without a usable external base Python cannot be adopted. Outside a custom virtual environment, Playify manages `.venv` automatically.
+Playify joins the channel and creates a controller message. Most day-to-day actions can be performed from that controller without running another command.
 
-Bootstrap initializes the JSON configuration files, checks dependencies, and opens the TUI. The TUI then offers to install an x64 GPL FFmpeg build if neither `bin/ffmpeg` nor a functional `ffmpeg` on `PATH` is available. The configuration wizard verifies credentials when the relevant service is reachable and prints a complete, copyable Discord invite URL; it never opens a browser.
-
-The TUI and bot Python modules are internal subprocess entrypoints and intentionally reject direct invocation.
-
-Copy `.env.example` to `.env` only if you prefer editing credentials manually. `DISCORD_TOKEN` is required; the Spotify ID and secret are optional but must be supplied as a pair.
+At least one person must be in the voice channel when playback starts. Commands that change playback normally belong in the text chat attached to the Voice or Stage channel.
 
 ## Commands
 
-Playback:
+### Adding music
 
-- `/play query` — start fresh playback or append while active
-- `/playnext query` — place an entire resolved request next, preserving its source order
-- `/search query` — choose one result collaboratively
-- `/pause`, `/resume`, `/replay`, `/seek [timestamp]`
-- `/skip`, `/previous`, `/stop`, `/reconnect`
+- `/play query` — play a search or link, or add it to the active queue
+- `/playnext query` — add a search, track, album, or playlist at the front of the queue
+- `/search query` — show ten results and choose one
 
-Queue and modes:
+### Playback
 
-- `/queue`, `/remove`, `/jumpto`, `/clearqueue`, `/shuffle`
-- `/loop`, `/autoplay [query]`, `/volume value`
+- `/pause` and `/resume`
+- `/replay` — restart the current track
+- `/seek [timestamp]` — seek directly or open the seek controls
+- `/skip` and `/previous`
+- `/volume value` — set the volume from 0% to 200%
+- `/reconnect` — reconnect a saved session without starting playback
+- `/stop` — stop playback and clear the session
 
-Read-only:
+### Queue and playback modes
 
-- `/nowplaying`
-- `/status`
+- `/queue` — show the current queue
+- `/remove` — choose a queued track to remove
+- `/jumpto` — choose a queued track to play next
+- `/clearqueue` — clear queued tracks and cancel unfinished imports
+- `/shuffle` — shuffle upcoming tracks
+- `/loop` — toggle looping for the current track
+- `/autoplay [query]` — toggle recommendations or start them from a particular song
 
-Server setup (requires Manage Server; administrators qualify):
+### Information and server setup
 
-- `/setup allowlist set channel1 … channel5`
-- `/setup allowlist add channel1 … channel5`
-- `/setup allowlist remove channel1 … channel5`
-- `/setup allowlist clear`
-- `/setup allowlist show`
-- `/setup channelmove show`
-- `/setup channelmove set mode`
+- `/nowplaying` — move the controller to the bottom of the channel
+- `/status` — show the running Playify version and player totals
+- `/setup allowlist ...` — choose which server channels may control Playify
+- `/setup channelmove ...` — choose whether playback may be moved between voice channels
 
-An empty allowlist means unrestricted accessible channels. Music-changing commands belong in the text chat attached to a Voice or Stage channel; `/queue`, `/nowplaying`, `/status`, and setup can also be used in allowed text channels. Users need access to the active channel chat but do not have to be connected to voice. Starting or moving playback still requires at least one human in the target voice channel.
+The `/setup` commands require the **Manage Server** permission. Discord will show the available subcommands and options as you type.
 
-## Sources and credentials
+## Supported input
 
-Spotify uses the official API first when `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are present, then falls back to the HTTP-only `spotifyscraper` path. Deezer, Apple Music, Tidal, and Amazon Music metadata use bounded shared HTTP requests; playback is resolved through YouTube first, with the configured SoundCloud fallback where applicable.
+| Input | What Playify does |
+|---|---|
+| A song, artist, or other search | Searches YouTube, with a SoundCloud fallback |
+| YouTube or YouTube Music link | Plays a video, playlist, or mix |
+| SoundCloud, Twitch, or Bandcamp link | Plays the supported track, collection, or stream |
+| Spotify, Deezer, Apple Music, Tidal, or Amazon Music link | Reads the listed tracks and searches for playable matches |
+| Public `.mp3`, `.wav`, `.ogg`, `.m4a`, `.mp4`, `.webm`, or `.flac` link | Streams the file directly |
 
-For YouTube cookies, place any Netscape-format `.txt` cookie files in `data/cookies/`. Playify tries anonymously first and only scans those files for a targeted retry. Cookie files, logs, settings, installation metadata, temporary files, and the database are ignored by Git.
+Spotify links work without Spotify credentials through a fallback, but adding a Spotify client ID and secret generally provides more reliable imports.
 
-Private direct-media destinations are blocked by default. Add only specific trusted hosts, IP addresses, or CIDRs through the `private_media_allowlist` setting. Loopback and cloud metadata addresses remain blocked even when listed.
+## Dashboard
 
-## TUI and persistence
+The terminal dashboard starts with Playify and shows whether the bot is online, what is playing, recent logs, and basic resource use.
 
-Dashboard hotkeys are `L` logs, `C` config, `S` settings, `U` update, `M` maintenance, `R` restart, and `Q` quit. Config, settings, update inspection, and the maintenance menu do not stop the bot. Choosing a Python dependency/interpreter refresh stops the bot and TUI before bootstrap replaces the environment and restarts Playify. Restart and quit require confirmation; Playify requests a graceful stop for 15 seconds before offering force, wait, or cancel.
+Its main shortcuts are:
 
-Full persistence is the default. Settings-only mode keeps the server allowlist and channel-move policy but purges player state on the next start. Changing from Full to Settings-only intentionally does not migrate old state. Older root-level `config.json` and `playify_state.db` files are never read or migrated.
+- `C` — edit the Discord and Spotify credentials
+- `S` — change Playify settings
+- `L` — open the full log viewer
+- `U` — check for Playify updates
+- `M` — update dependencies or install/update FFmpeg
+- `R` — restart the bot
+- `Q` — quit Playify
 
-## Local data disclosure
+Settings and logs can be opened while the bot is running. The dashboard tells you when a change requires a restart.
 
-Playify is self-hosted. Discord supplies command, server, channel, member, and voice-state data needed to run the bot. Playify stores the selected server policy and, in Full mode, queue/playback state in local SQLite. Credentials remain in local `.env`; media is streamed from third-party services; operational logs stay under `data/logs/`. There is no telemetry service or hosted Playify database.
+## Files and privacy
+
+Playify keeps its configuration, queue, logs, and temporary files inside the project folder:
+
+- `.env` contains the Discord token and optional Spotify credentials.
+- `data/` contains settings, saved playback state, cookies, and logs.
+- `bin/` contains the managed FFmpeg executable, if installed.
+
+These paths are ignored by Git. Playify has no telemetry or hosted database, and it does not download or keep copies of the music it streams.
+
+By default, queue and playback state are restored after a restart. You can select **Settings only** in the dashboard if you want Playify to remember server settings but discard playback state.
+
+### YouTube cookies
+
+Most YouTube links work anonymously. If YouTube requires an account for something you are allowed to access, export cookies in Netscape `.txt` format and place the file in `data/cookies/`. Playify only tries those files after an anonymous request fails.
 
 ## License and origin
 
-Released under the unchanged [MIT License](LICENSE). Playify was originally created by [alan7383](https://github.com/alan7383/playify).
+Playify is released under the [MIT License](LICENSE) and was originally created by [alan7383](https://github.com/alan7383/playify).
