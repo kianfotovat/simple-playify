@@ -28,17 +28,46 @@ async def allowed_interaction(responses: Responses, interaction: discord.Interac
     return True
 
 
+async def dismiss_message(
+    view: discord.ui.View,
+    responses: Responses,
+    interaction: discord.Interaction,
+    message_pointer: discord.Message | None,
+) -> None:
+    """Acknowledge a component and delete its complete interaction message."""
+
+    if not interaction.response.is_done():
+        await interaction.response.defer()
+    view.stop()
+    sent = interaction.message or message_pointer
+    if sent is not None:
+        try:
+            await sent.delete()
+        except discord.NotFound:
+            pass
+        except (discord.Forbidden, discord.HTTPException):
+            return
+        await responses.cancel_expiration(sent)
+        return
+    try:
+        await interaction.delete_original_response()
+    except discord.NotFound:
+        pass
+
+
 class QueueView(discord.ui.View):
     def __init__(
         self,
         session: PlayerSession,
         responses: Responses,
         action: str = "view",
+        on_finish: Callable[["QueueView"], None] | None = None,
     ) -> None:
         super().__init__(timeout=120)
         self.session = session
         self.responses = responses
         self.action = action
+        self.on_finish = on_finish
         self.page = 0
         self.message: discord.Message | None = None
         self._rebuild()
@@ -58,7 +87,11 @@ class QueueView(discord.ui.View):
         visible = tracks[start : start + 10]
         if self.action in {"remove", "jump"} and visible:
             select = discord.ui.Select(
-                placeholder="Choose a queued track",
+                placeholder=(
+                    "Choose a queued track to remove"
+                    if self.action == "remove"
+                    else "Choose a queued track to jump to"
+                ),
                 options=[
                     discord.SelectOption(
                         label=track.title[:100],
@@ -72,6 +105,8 @@ class QueueView(discord.ui.View):
 
             async def selected(interaction: discord.Interaction) -> None:
                 occurrence_id = select.values[0]
+                self._finish()
+                await dismiss_message(self, self.responses, interaction, self.message)
                 if self.action == "remove":
                     changed = await self.session.remove(occurrence_id)
                 else:
@@ -88,23 +123,22 @@ class QueueView(discord.ui.View):
                             title=safe_text(changed.title),
                         ),
                     )
-                self._rebuild()
-                if self.message:
-                    await self.message.edit(embed=self.embed(), view=self)
 
             select.callback = selected
             self.add_item(select)
 
-        previous = discord.ui.Button(label="Previous", disabled=self.page == 0, row=1)
-        refresh = discord.ui.Button(label="Refresh", style=discord.ButtonStyle.secondary, row=1)
-        following = discord.ui.Button(label="Next", disabled=self.page >= pages - 1, row=1)
+        previous = discord.ui.Button(
+            label="⬅️ Previous", disabled=self.page == 0, row=1
+        )
+        following = discord.ui.Button(
+            label="Next ➡️", disabled=self.page >= pages - 1, row=1
+        )
+        close = discord.ui.Button(
+            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+        )
 
         async def go_previous(interaction: discord.Interaction) -> None:
             self.page -= 1
-            self._rebuild()
-            await interaction.response.edit_message(embed=self.embed(), view=self)
-
-        async def do_refresh(interaction: discord.Interaction) -> None:
             self._rebuild()
             await interaction.response.edit_message(embed=self.embed(), view=self)
 
@@ -113,12 +147,35 @@ class QueueView(discord.ui.View):
             self._rebuild()
             await interaction.response.edit_message(embed=self.embed(), view=self)
 
+        async def close_view(interaction: discord.Interaction) -> None:
+            self._finish()
+            await dismiss_message(self, self.responses, interaction, self.message)
+
         previous.callback = go_previous
-        refresh.callback = do_refresh
         following.callback = go_next
+        close.callback = close_view
         self.add_item(previous)
-        self.add_item(refresh)
         self.add_item(following)
+        self.add_item(close)
+
+    def _finish(self) -> None:
+        self.stop()
+        if self.on_finish:
+            callback = self.on_finish
+            self.on_finish = None
+            callback(self)
+
+    async def refresh(self) -> None:
+        if self.is_finished() or self.message is None:
+            return
+        self._rebuild()
+        try:
+            await self.message.edit(embed=self.embed(), view=self)
+        except (discord.NotFound, discord.Forbidden):
+            self._finish()
+
+    async def on_timeout(self) -> None:
+        self._finish()
 
     def embed(self) -> discord.Embed:
         tracks = self._tracks()
@@ -150,6 +207,7 @@ class SearchView(discord.ui.View):
         super().__init__(timeout=120)
         self.tracks = list(tracks[:10])
         self.responses = responses
+        self.message: discord.Message | None = None
         select = discord.ui.Select(
             placeholder="Choose a result",
             options=[
@@ -163,12 +221,20 @@ class SearchView(discord.ui.View):
         )
 
         async def selected(interaction: discord.Interaction) -> None:
-            select.disabled = True
-            await interaction.response.edit_message(view=self)
+            await dismiss_message(self, self.responses, interaction, self.message)
             await on_pick(interaction, self.tracks[int(select.values[0])])
 
         select.callback = selected
         self.add_item(select)
+        close = discord.ui.Button(
+            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+        )
+
+        async def close_view(interaction: discord.Interaction) -> None:
+            await dismiss_message(self, self.responses, interaction, self.message)
+
+        close.callback = close_view
+        self.add_item(close)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await allowed_interaction(self.responses, interaction)
@@ -326,25 +392,50 @@ class SeekView(discord.ui.View):
 
 
 class ChannelPaginator(discord.ui.View):
-    def __init__(self, channels: Sequence[discord.abc.GuildChannel]) -> None:
+    def __init__(
+        self,
+        channels: Sequence[discord.abc.GuildChannel],
+        responses: Responses,
+    ) -> None:
         super().__init__(timeout=120)
         self.channels = list(channels)
+        self.responses = responses
+        self.message: discord.Message | None = None
         self.page = 0
-        previous = discord.ui.Button(label="Previous")
-        following = discord.ui.Button(label="Next")
+        previous = discord.ui.Button(label="⬅️ Previous")
+        following = discord.ui.Button(label="Next ➡️")
+        close = discord.ui.Button(
+            label="Close", emoji="✖️", style=discord.ButtonStyle.danger
+        )
+
+        def update_disabled() -> None:
+            pages = max(1, math.ceil(len(self.channels) / 10))
+            previous.disabled = self.page == 0
+            following.disabled = self.page >= pages - 1
 
         async def go_previous(interaction: discord.Interaction) -> None:
             self.page = max(0, self.page - 1)
+            update_disabled()
             await interaction.response.edit_message(embed=self.embed(), view=self)
 
         async def go_next(interaction: discord.Interaction) -> None:
             self.page = min(max(0, math.ceil(len(self.channels) / 10) - 1), self.page + 1)
+            update_disabled()
             await interaction.response.edit_message(embed=self.embed(), view=self)
+
+        async def close_view(interaction: discord.Interaction) -> None:
+            await dismiss_message(self, self.responses, interaction, self.message)
 
         previous.callback = go_previous
         following.callback = go_next
+        close.callback = close_view
         self.add_item(previous)
         self.add_item(following)
+        self.add_item(close)
+        update_disabled()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await allowed_interaction(self.responses, interaction)
 
     def embed(self) -> discord.Embed:
         pages = max(1, math.ceil(len(self.channels) / 10))

@@ -13,7 +13,7 @@ from .discord_utils import format_time, safe_text
 from .messages import message
 from .models import ServerSettings, Track
 from .services.player import PlayerSession, _human_count
-from .ui.views import ChannelPaginator, QueueView, SearchView, SeekView
+from .ui.views import ChannelPaginator, SearchView, SeekView
 
 LOGGER = logging.getLogger(__name__)
 
@@ -153,14 +153,15 @@ class CommandSuite:
                 for channel_id in sorted(settings.allowlist)
                 if (channel := interaction.guild.get_channel(channel_id)) is not None
             ]
-            view = ChannelPaginator(channels)
-            await self.app.responses.send(
+            view = ChannelPaginator(channels, self.app.responses)
+            sent = await self.app.responses.send(
                 interaction,
                 message("command.allowed_only"),
                 embed=view.embed(),
                 view=view,
                 lifetime="interactive",
             )
+            view.message = sent
             return False
         base = name.split(" ", 1)[0]
         if base in GENERAL or name.startswith(SETUP_PREFIX) or base in READ_ONLY:
@@ -378,6 +379,7 @@ class CommandSuite:
                 color=0x5865F2,
             )
             await progress.edit(content=None, embed=embed, view=view)
+            view.message = progress
             await self.app.responses.expire(progress, "interactive")
         except Exception as exc:
             LOGGER.exception("Search failed: %s", exc)
@@ -500,7 +502,7 @@ class CommandSuite:
 
     async def queue(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
-        view = QueueView(session, self.app.responses)
+        view = self.app.controllers.queue_view(session)
         sent = await self.app.responses.send(
             interaction, embed=view.embed(), view=view, lifetime="interactive"
         )
@@ -508,7 +510,7 @@ class CommandSuite:
 
     async def remove(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
-        view = QueueView(session, self.app.responses, action="remove")
+        view = self.app.controllers.queue_view(session, action="remove")
         sent = await self.app.responses.send(
             interaction, embed=view.embed(), view=view, lifetime="interactive"
         )
@@ -517,7 +519,7 @@ class CommandSuite:
     async def jumpto(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
         await self._wake(interaction, session)
-        view = QueueView(session, self.app.responses, action="jump")
+        view = self.app.controllers.queue_view(session, action="jump")
         sent = await self.app.responses.send(
             interaction, embed=view.embed(), view=view, lifetime="interactive"
         )
@@ -723,14 +725,15 @@ class CommandSuite:
                 permissions = channel.permissions_for(member) if member else None
                 if permissions and permissions.view_channel and permissions.send_messages:
                     channels.append(channel)
-        view = ChannelPaginator(channels)
-        await self.app.responses.send(
+        view = ChannelPaginator(channels, self.app.responses)
+        sent = await self.app.responses.send(
             interaction,
             message("setup.allowlist.unrestricted") if not settings.allowlist else None,
             embed=view.embed(),
             view=view,
             lifetime="interactive",
         )
+        view.message = sent
 
     async def channelmove_show(self, interaction: discord.Interaction) -> None:
         mode = self.server(interaction.guild_id).channel_move_mode

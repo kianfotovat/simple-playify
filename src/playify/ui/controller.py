@@ -152,14 +152,14 @@ class ControllerView(discord.ui.View):
             await self.manager.responses.send(interaction, message("player.volume", volume=volume))
 
         async def queue(interaction: discord.Interaction) -> None:
-            view = QueueView(self.session, self.manager.responses)
+            view = self.manager.queue_view(self.session)
             sent = await self.manager.responses.send(
                 interaction, embed=view.embed(), view=view, lifetime="interactive"
             )
             view.message = sent
 
         async def jump(interaction: discord.Interaction) -> None:
-            view = QueueView(self.session, self.manager.responses, action="jump")
+            view = self.manager.queue_view(self.session, action="jump")
             sent = await self.manager.responses.send(
                 interaction, embed=view.embed(), view=view, lifetime="interactive"
             )
@@ -228,8 +228,27 @@ class ControllerManager:
         self.responses = responses
         self.edit_tasks: dict[int, asyncio.Task[None]] = {}
         self.ticker_tasks: dict[int, asyncio.Task[None]] = {}
+        self.queue_views: dict[int, set[QueueView]] = {}
         self.dirty: set[int] = set()
         self.expected_deletions: dict[tuple[int, int], float] = {}
+
+    def queue_view(self, session: PlayerSession, action: str = "view") -> QueueView:
+        view = QueueView(
+            session,
+            self.responses,
+            action=action,
+            on_finish=self._discard_queue_view,
+        )
+        self.queue_views.setdefault(session.guild_id, set()).add(view)
+        return view
+
+    def _discard_queue_view(self, view: QueueView) -> None:
+        views = self.queue_views.get(view.session.guild_id)
+        if not views:
+            return
+        views.discard(view)
+        if not views:
+            self.queue_views.pop(view.session.guild_id, None)
 
     async def startup_cleanup(self) -> None:
         pointers = await self.storage.pop_controller_cleanups()
@@ -411,6 +430,8 @@ class ControllerManager:
             task.cancel()
 
     async def on_player_change(self, session: PlayerSession, event: str) -> None:
+        for view in list(self.queue_views.get(session.guild_id, ())):
+            await view.refresh()
         if event == "external_move" and session.state.controller_channel_id and session.state.controller_message_id:
             await self._delete_message(
                 session.state.controller_channel_id, session.state.controller_message_id
@@ -457,6 +478,10 @@ class ControllerManager:
                 return
 
     async def shutdown(self) -> None:
+        for views in self.queue_views.values():
+            for view in views:
+                view.stop()
+        self.queue_views.clear()
         tasks = list(self.edit_tasks.values()) + list(self.ticker_tasks.values())
         for task in tasks:
             task.cancel()
