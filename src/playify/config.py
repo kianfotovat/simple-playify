@@ -3,52 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
-import shutil
 from copy import deepcopy
-from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any, Mapping
 
-from .constants import INSTALLATION_PATH, SETTINGS_PATH, ensure_runtime_dirs
-
-LOGGER = logging.getLogger(__name__)
-
-DEFAULT_SETTINGS: dict[str, Any] = {
-    "persistence_mode": "full",
-    "updates_enabled": True,
-    "tidal_country": "US",
-    "soundcloud_fallback": True,
-    "private_media_allowlist": [],
-    "ip_mode": "auto",
-    "youtube_clients": ["web", "android", "ios"],
-    "worker_count": "auto",
-    "http_concurrency": "auto",
-    "tui_refresh": "auto",
-    "color_mode": "auto",
-    "symbol_mode": "auto",
-    "controller_idle_image": "https://i.imgur.com/vDusBWD.png",
-    "bot_status_type": "none",
-    "bot_status_text": "",
-}
-
-DEFAULT_INSTALLATION: dict[str, Any] = {
-    "last_dependency_check": None,
-    "dependency_snooze_until": None,
-    "last_ffmpeg_check": None,
-    "update_remind_after": None,
-    "ignored_update_sha": None,
-    "previous_update_sha": None,
-    "last_update_sha": None,
-    "pending_environment": None,
-    "last_chrome_major": 151,
-}
-
-
-def _timestamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+from .constants import INSTALLATION_PATH, SETTINGS_PATH
+from .messages import message
 
 
 def _atomic_json_write(path: Path, value: Mapping[str, Any]) -> None:
@@ -66,34 +28,22 @@ def _atomic_json_write(path: Path, value: Mapping[str, Any]) -> None:
 
 
 class JsonStore:
-    """A JSON store that preserves unknown keys and writes atomically."""
+    """A runtime JSON store for files initialized by bootstrap.py."""
 
-    def __init__(self, path: Path, defaults: Mapping[str, Any]) -> None:
-        ensure_runtime_dirs()
+    def __init__(self, path: Path) -> None:
         self.path = path
-        self.defaults = deepcopy(dict(defaults))
         self._lock = RLock()
         self._values = self._load()
 
     def _load(self) -> dict[str, Any]:
-        if not self.path.exists():
-            return deepcopy(self.defaults)
         try:
             with self.path.open("r", encoding="utf-8") as handle:
                 loaded = json.load(handle)
             if not isinstance(loaded, dict):
                 raise ValueError("the JSON root must be an object")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
-            backup = self.path.with_name(f"{self.path.stem}.invalid-{_timestamp()}.json")
-            try:
-                shutil.copy2(self.path, backup)
-            except OSError:
-                LOGGER.exception("Could not back up invalid settings file %s", self.path)
-            LOGGER.error("Ignoring invalid JSON in %s: %s", self.path, exc)
-            return deepcopy(self.defaults)
-        merged = deepcopy(self.defaults)
-        merged.update(loaded)
-        return merged
+            raise RuntimeError(message("config.unavailable", path=self.path)) from exc
+        return loaded
 
     def reload(self) -> None:
         with self._lock:
@@ -124,7 +74,7 @@ class JsonStore:
 
 class SettingsManager(JsonStore):
     def __init__(self, path: Path = SETTINGS_PATH) -> None:
-        super().__init__(path, DEFAULT_SETTINGS)
+        super().__init__(path)
 
     def validate(self) -> list[str]:
         """Return validation errors while leaving forward-compatible keys alone."""
@@ -149,4 +99,4 @@ class SettingsManager(JsonStore):
 
 
 Config = SettingsManager()
-Installation = JsonStore(INSTALLATION_PATH, DEFAULT_INSTALLATION)
+Installation = JsonStore(INSTALLATION_PATH)

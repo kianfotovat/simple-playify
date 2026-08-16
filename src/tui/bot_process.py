@@ -15,6 +15,8 @@ from typing import Any
 
 import psutil
 
+from src.playify.constants import BOT_LAUNCH_STAGE, LAUNCH_STAGE_ENV
+
 
 class BotProcess:
     def __init__(self, project_root: Path, python_executable: Path) -> None:
@@ -65,6 +67,7 @@ class BotProcess:
         environment = os.environ.copy()
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment[LAUNCH_STAGE_ENV] = BOT_LAUNCH_STAGE
         environment["PLAYIFY_CONTROL_ID"] = control_id
         environment["PATH"] = str(self.project_root / "bin") + os.pathsep + environment.get("PATH", "")
         flags = 0

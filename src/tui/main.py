@@ -10,7 +10,11 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from src.playify.config import Config
-from src.playify.constants import PROJECT_ROOT, display_version
+from src.playify.constants import (
+    PROJECT_ROOT,
+    TUI_RUNTIME_REFRESH_EXIT,
+    display_version,
+)
 from src.playify.logging_utils import configure_logging
 from src.playify.messages import message
 
@@ -131,11 +135,6 @@ def main() -> None:
         raise SystemExit(2)
 
     python = Path(sys.executable).resolve()
-    expected = (PROJECT_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")).resolve()
-    if python != expected:
-        console.print(message("tui.main.venv_required"))
-        raise SystemExit(1)
-
     bot = BotProcess(PROJECT_ROOT, python)
     startup = _start_bot(console, bot)
     if startup not in {"online", "timeout"}:
@@ -159,7 +158,9 @@ def main() -> None:
             elif action == "maintenance":
                 bot_restart, launcher_restart = run_maintenance(console)
                 if launcher_restart:
-                    bot.metrics["restart_required"] = message("tui.scope.launcher")
+                    if not _stop_with_choice(console, bot):
+                        continue
+                    raise SystemExit(TUI_RUNTIME_REFRESH_EXIT)
                 elif bot_restart:
                     bot.metrics["restart_required"] = message("tui.scope.bot")
                 wait_for_key(console)

@@ -15,7 +15,7 @@ This fork follows Playify V2's modular Python/TUI architecture while keeping the
 | Sources | Broad catalog and upload support | YouTube/Music, SoundCloud, Twitch, Bandcamp, Spotify, Deezer, Apple Music, Tidal, Amazon Music, and validated direct media URLs |
 | Playback | Queue, filters, lyrics/karaoke, uploads, 24/7, autoplay | Queue, dormant resume, autoplay, loop, history, seek, controller; no filters, lyrics, karaoke, uploads, or 24/7 mode |
 | State | Upstream V2 SQLite layout | Fresh async `data/playify.db`; Full or Settings-only persistence |
-| Operations | TUI updater/installer | Managed `.venv`, managed FFmpeg, structured supervision, and confirmation-based Git updates |
+| Operations | TUI updater/installer | Owned virtual environment, managed FFmpeg, structured supervision, and confirmation-based Git updates |
 | Documentation | Static documentation site | This README only |
 
 The current version is `2.1.0`. In the TUI and `/status`, Playify also displays the checked-out seven-character Git revision; a non-Git copy displays `unknown`.
@@ -61,25 +61,17 @@ chmod +x start.sh
 ./start.sh
 ```
 
-The shared bootstrap creates and validates `.venv`, installs the dependencies, and opens the TUI. The TUI then offers to install an x64 GPL FFmpeg build if neither `bin/ffmpeg` nor a functional `ffmpeg` on `PATH` is available. The configuration wizard verifies credentials when the relevant service is reachable and prints a complete, copyable Discord invite URL; it never opens a browser.
-
-### Manual fallback
-
-If a launcher cannot run, create the environment in the repository root and then start the TUI with that exact interpreter:
+Both launchers run `bootstrap.py`, the canonical application entrypoint. You may also invoke it directly with a supported Python or alias that command as `playify`:
 
 ```text
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m src.tui
+python bootstrap.py
 ```
 
-Linux equivalents:
+On its first run inside a custom virtual environment, bootstrap asks whether Playify should use the project's `.venv` or adopt the detected environment. Neither choice is preselected. Adoption dedicates the entire detected environment to Playify: a dependency refresh deletes and recreates it with Playify's requirements only, so unrelated packages are not restored. Conda environments and environments without a usable external base Python cannot be adopted. Outside a custom virtual environment, Playify manages `.venv` automatically.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m src.tui
-```
+Bootstrap initializes the JSON configuration files, checks dependencies, and opens the TUI. The TUI then offers to install an x64 GPL FFmpeg build if neither `bin/ffmpeg` nor a functional `ffmpeg` on `PATH` is available. The configuration wizard verifies credentials when the relevant service is reachable and prints a complete, copyable Discord invite URL; it never opens a browser.
+
+The TUI and bot Python modules are internal subprocess entrypoints and intentionally reject direct invocation.
 
 Copy `.env.example` to `.env` only if you prefer editing credentials manually. `DISCORD_TOKEN` is required; the Spotify ID and secret are optional but must be supplied as a pair.
 
@@ -125,7 +117,7 @@ Private direct-media destinations are blocked by default. Add only specific trus
 
 ## TUI and persistence
 
-Dashboard hotkeys are `L` logs, `C` config, `S` settings, `U` update, `M` maintenance, `R` restart, and `Q` quit. Config, settings, update inspection, and maintenance screens do not stop the bot. Restart and quit require confirmation; Playify requests a graceful stop for 15 seconds before offering force, wait, or cancel.
+Dashboard hotkeys are `L` logs, `C` config, `S` settings, `U` update, `M` maintenance, `R` restart, and `Q` quit. Config, settings, update inspection, and the maintenance menu do not stop the bot. Choosing a Python dependency/interpreter refresh stops the bot and TUI before bootstrap replaces the environment and restarts Playify. Restart and quit require confirmation; Playify requests a graceful stop for 15 seconds before offering force, wait, or cancel.
 
 Full persistence is the default. Settings-only mode keeps the server allowlist and channel-move policy but purges player state on the next start. Changing from Full to Settings-only intentionally does not migrate old state. Older root-level `config.json` and `playify_state.db` files are never read or migrated.
 

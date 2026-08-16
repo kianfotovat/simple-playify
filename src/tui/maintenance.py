@@ -167,14 +167,8 @@ def run_maintenance(console: Console) -> tuple[bool, bool]:
     bot_restart = False
     launcher_restart = False
     if choice in {"1", "3"}:
-        try:
-            from bootstrap import stage_pending_environment
-
-            stage_pending_environment()
-            console.print(message("tui.maintenance.staged"))
-            launcher_restart = True
-        except Exception as exc:
-            console.print(message("tui.maintenance.stage_failed", error=exc))
+        console.print(message("tui.maintenance.staged"))
+        launcher_restart = True
     if choice in {"2", "3"}:
         bot_restart = install_ffmpeg(console)
     return bot_restart, launcher_restart
