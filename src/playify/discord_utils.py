@@ -19,8 +19,8 @@ LOGGER = logging.getLogger(__name__)
 
 Lifetime = Literal["success", "interactive", "error", "controller", "none"]
 LIFETIMES: dict[Lifetime, int | None] = {
-    "success": 30,
-    "interactive": 120,
+    "success": 10,
+    "interactive": 60,
     "error": 300,
     "controller": None,
     "none": None,
@@ -102,7 +102,7 @@ class Responses:
             await interaction.response.defer(thinking=True, ephemeral=False)
         return await self.send(
             interaction,
-            f"{safe_text(label)}\n`[{progress_bar(0)}]`",
+            safe_text(label),
             lifetime="none",
         )
 
@@ -115,7 +115,7 @@ class Responses:
     ) -> None:
         try:
             await sent.edit(
-                content=f"{content}\n`[{progress_bar(1)}]`",
+                content=content,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             await self.expire(sent, "error" if failed else "success")

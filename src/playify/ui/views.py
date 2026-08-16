@@ -59,7 +59,7 @@ class DismissView(discord.ui.View):
     """A minimal Close control for an otherwise informational message."""
 
     def __init__(self, responses: Responses) -> None:
-        super().__init__(timeout=120)
+        super().__init__(timeout=60)
         self.responses = responses
         self.message: discord.Message | None = None
         close = discord.ui.Button(
@@ -84,7 +84,7 @@ class QueueView(discord.ui.View):
         action: str = "view",
         on_finish: Callable[["QueueView"], None] | None = None,
     ) -> None:
-        super().__init__(timeout=120)
+        super().__init__(timeout=60)
         self.session = session
         self.responses = responses
         self.action = action
@@ -225,7 +225,7 @@ class SearchView(discord.ui.View):
         on_pick: Callable[[discord.Interaction, Track], Awaitable[None]],
         responses: Responses,
     ) -> None:
-        super().__init__(timeout=120)
+        super().__init__(timeout=60)
         self.tracks = list(tracks[:10])
         self.responses = responses
         self.message: discord.Message | None = None
@@ -314,7 +314,7 @@ class SeekTimestampModal(discord.ui.Modal, title="Jump To"):
 
 class SeekView(discord.ui.View):
     def __init__(self, session: PlayerSession, responses: Responses) -> None:
-        super().__init__(timeout=120)
+        super().__init__(timeout=60)
         self.session = session
         self.responses = responses
         self.message: discord.Message | None = None
@@ -421,7 +421,7 @@ class ChannelPaginator(discord.ui.View):
         channels: Sequence[discord.abc.GuildChannel],
         responses: Responses,
     ) -> None:
-        super().__init__(timeout=120)
+        super().__init__(timeout=60)
         self.channels = list(channels)
         self.responses = responses
         self.message: discord.Message | None = None
