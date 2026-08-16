@@ -81,6 +81,7 @@ class DismissView(discord.ui.View):
         )
 
         async def close_view(interaction: discord.Interaction) -> None:
+            await self.before_dismiss()
             await dismiss_message(self, self.responses, interaction, self.message)
 
         close.callback = close_view
@@ -88,6 +89,86 @@ class DismissView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await active_interaction(self.responses, interaction)
+
+    async def before_dismiss(self) -> None:
+        pass
+
+    async def on_timeout(self) -> None:
+        await self.before_dismiss()
+
+
+class NowPlayingView(DismissView):
+    def __init__(self, session: PlayerSession, responses: Responses) -> None:
+        super().__init__(responses)
+        self.session = session
+        self.ticker: asyncio.Task[None] | None = None
+
+    def embed(self) -> discord.Embed:
+        track = self.session.state.current
+        if track is None:
+            return discord.Embed(description=message("player.nothing_playing"), color=0x5865F2)
+        state = (
+            "Dormant"
+            if self.session.state.dormant
+            else "Paused"
+            if self.session.state.paused
+            else "Playing"
+        )
+        position = format_time(self.session.position)
+        if track.duration is not None:
+            position += f" / {format_time(track.duration)}"
+        embed = discord.Embed(title=state, color=0x5865F2)
+        embed.add_field(name="Track", value=safe_text(track.title), inline=False)
+        embed.add_field(name="Artist", value=safe_text(track.uploader), inline=False)
+        embed.add_field(name="Position", value=position, inline=False)
+        if track.thumbnail:
+            embed.set_thumbnail(url=track.thumbnail)
+        if self.session.state.dormant:
+            embed.set_footer(
+                text="Use a playback command in an occupied Voice or Stage chat to resume."
+            )
+        return embed
+
+    def start_ticker(self) -> None:
+        async def tick() -> None:
+            try:
+                while not self.is_finished():
+                    await asyncio.sleep(1)
+                    if self.message is None:
+                        continue
+                    if self.session.state.current is None:
+                        try:
+                            await self.message.delete()
+                        except discord.NotFound:
+                            pass
+                        await self.responses.cancel_expiration(self.message)
+                        self.stop()
+                        break
+                    await self.message.edit(embed=self.embed(), view=self)
+            except (
+                asyncio.CancelledError,
+                discord.NotFound,
+                discord.Forbidden,
+                discord.HTTPException,
+            ):
+                pass
+            finally:
+                if self.ticker is asyncio.current_task():
+                    self.ticker = None
+
+        self.ticker = asyncio.create_task(
+            tick(), name=f"now-playing-view-{self.session.guild_id}"
+        )
+
+    async def stop_ticker(self) -> None:
+        ticker = self.ticker
+        self.ticker = None
+        if ticker and ticker is not asyncio.current_task() and not ticker.done():
+            ticker.cancel()
+            await asyncio.gather(ticker, return_exceptions=True)
+
+    async def before_dismiss(self) -> None:
+        await self.stop_ticker()
 
 
 class QueueView(discord.ui.View):

@@ -13,7 +13,7 @@ from .discord_utils import duration_text, format_time, safe_text
 from .messages import message
 from .models import ServerSettings, Track
 from .services.player import PlayerSession, _human_count
-from .ui.views import ChannelPaginator, DismissView, SearchView, SeekView
+from .ui.views import ChannelPaginator, NowPlayingView, SearchView, SeekView
 
 LOGGER = logging.getLogger(__name__)
 
@@ -606,20 +606,12 @@ class CommandSuite:
         if not track:
             await self.app.responses.send(interaction, message("player.empty"))
             return
-        state = "Dormant" if session.state.dormant else "Paused" if session.state.paused else "Playing"
-        embed = discord.Embed(title=state, color=0x5865F2)
-        embed.add_field(name="Track", value=safe_text(track.title), inline=False)
-        embed.add_field(name="Artist", value=safe_text(track.uploader), inline=False)
-        embed.add_field(name="Position", value=format_time(session.position), inline=False)
-        if track.thumbnail:
-            embed.set_thumbnail(url=track.thumbnail)
-        if session.state.dormant:
-            embed.set_footer(text="Use a playback command in an occupied Voice or Stage chat to resume.")
-        view = DismissView(self.app.responses)
+        view = NowPlayingView(session, self.app.responses)
         sent = await self.app.responses.send(
-            interaction, embed=embed, view=view, lifetime="interactive"
+            interaction, embed=view.embed(), view=view, lifetime="interactive"
         )
         view.message = sent
+        view.start_ticker()
 
     async def status(self, interaction: discord.Interaction) -> None:
         players = sum(1 for session in self.app.players.sessions.values() if session.active or session.state.dormant)
