@@ -67,6 +67,20 @@ def parse_timestamp(value: str) -> float:
     return float(sum(number * (60 ** index) for index, number in enumerate(reversed(numbers))))
 
 
+def search_result_embed(track: Track, index: int) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"{index + 1}. {safe_text(track.title, 100)}",
+        description=(
+            f"{safe_text(track.uploader, 60)} • "
+            f"{duration_text(track.duration, live=track.is_live)}"
+        ),
+        color=0x5865F2,
+    )
+    if track.thumbnail:
+        embed.set_thumbnail(url=track.thumbnail)
+    return embed
+
+
 class CommandSuite:
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -370,17 +384,13 @@ class CommandSuite:
                 )
 
             view = SearchView(tracks, picked, self.app.responses)
-            embed = discord.Embed(
-                title="Search results",
-                description="\n\n".join(
-                    f"`{index + 1}` **{safe_text(track.title, 100)}**\n"
-                    f"{safe_text(track.uploader, 60)} • "
-                    f"{duration_text(track.duration, live=track.is_live)}"
-                    for index, track in enumerate(tracks)
-                ),
-                color=0x5865F2,
+            embeds = [
+                search_result_embed(track, index)
+                for index, track in enumerate(tracks[:10])
+            ]
+            await progress.edit(
+                content="## Search Results", embeds=embeds, view=view
             )
-            await progress.edit(content=None, embed=embed, view=view)
             view.message = progress
             await self.app.responses.expire(progress, "interactive")
         except Exception as exc:
