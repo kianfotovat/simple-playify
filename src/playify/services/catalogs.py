@@ -15,9 +15,12 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, quote, urlsplit
 
 from ..config import Config
+from ..messages import message
 from .http_client import BROWSER_USER_AGENT, HttpClient
 
 LOGGER = logging.getLogger(__name__)
+UNKNOWN_ARTIST = message("track.unknown_artist")
+UNKNOWN_TITLE = message("track.unknown_title")
 
 SPOTIFY_HOSTS = {"open.spotify.com"}
 DEEZER_HOSTS = {"deezer.com", "www.deezer.com", "link.deezer.com"}
@@ -86,11 +89,11 @@ def _clean(value: Any, fallback: str) -> str:
 def _artist(value: dict[str, Any]) -> str:
     artists = value.get("artists") or []
     if artists and isinstance(artists[0], dict):
-        return _clean(artists[0].get("name"), "Unknown artist")
+        return _clean(artists[0].get("name"), UNKNOWN_ARTIST)
     artist = value.get("artist") or value.get("byArtist") or {}
     if isinstance(artist, dict):
-        return _clean(artist.get("name"), "Unknown artist")
-    return _clean(value.get("artistName"), "Unknown artist")
+        return _clean(artist.get("name"), UNKNOWN_ARTIST)
+    return _clean(value.get("artistName"), UNKNOWN_ARTIST)
 
 
 class CatalogRouter:
@@ -176,7 +179,7 @@ class CatalogRouter:
         def append(track: dict[str, Any] | None) -> None:
             if track:
                 result.append(
-                    CatalogItem(_clean(track.get("name"), "Unknown title"), _artist(track), "spotify")
+                    CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify")
                 )
 
         if kind == "track":
@@ -236,7 +239,7 @@ class CatalogRouter:
             track = entry.get("track", entry) if isinstance(entry, dict) else None
             if isinstance(track, dict):
                 result.append(
-                    CatalogItem(_clean(track.get("name"), "Unknown title"), _artist(track), "spotify")
+                    CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify")
                 )
         return result
 
@@ -275,7 +278,7 @@ class CatalogRouter:
         def consume(page: dict[str, Any]) -> list[CatalogItem]:
             return [
                 CatalogItem(
-                    _clean(track.get("title"), "Unknown title"),
+                    _clean(track.get("title"), UNKNOWN_TITLE),
                     _artist(track),
                     "deezer",
                 )
@@ -288,7 +291,7 @@ class CatalogRouter:
             if not isinstance(track, dict) or track.get("error"):
                 raise CatalogError("Deezer track was not found")
             return CatalogResult(
-                [CatalogItem(_clean(track.get("title"), "Unknown title"), _artist(track), "deezer")]
+                [CatalogItem(_clean(track.get("title"), UNKNOWN_TITLE), _artist(track), "deezer")]
             )
         if kind == "playlist":
             return await self._paged_json(f"{api}/playlist/{quote(identifier)}/tracks", consume)
@@ -322,7 +325,7 @@ class CatalogRouter:
                     else None
                 )
                 if title and artist and (target is None or str(identifier) == str(target)):
-                    found.append(CatalogItem(_clean(title, "Unknown title"), _clean(artist, "Unknown artist"), "apple"))
+                    found.append(CatalogItem(_clean(title, UNKNOWN_TITLE), _clean(artist, UNKNOWN_ARTIST), "apple"))
                 for child in value.values():
                     walk(child)
             elif isinstance(value, list):
@@ -368,7 +371,7 @@ class CatalogRouter:
                 for value in raw_items:
                     track = value.get("item", value) if isinstance(value, dict) else {}
                     if track.get("title"):
-                        items.append(CatalogItem(_clean(track.get("title"), "Unknown title"), _artist(track), "tidal"))
+                        items.append(CatalogItem(_clean(track.get("title"), UNKNOWN_TITLE), _artist(track), "tidal"))
                 if kind == "track":
                     break
                 offset += len(raw_items)
@@ -461,8 +464,8 @@ class CatalogRouter:
                 if title and artist:
                     items.append(
                         CatalogItem(
-                            re.sub(r"\s*\[Explicit\]\s*", "", _clean(title, "Unknown title"), flags=re.I),
-                            _clean(artist, "Unknown artist"),
+                            re.sub(r"\s*\[Explicit\]\s*", "", _clean(title, UNKNOWN_TITLE), flags=re.I),
+                            _clean(artist, UNKNOWN_ARTIST),
                             "amazon",
                         )
                     )

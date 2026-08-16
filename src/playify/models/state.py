@@ -8,6 +8,8 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
+from ..messages import message
+
 Provenance = Literal["user", "autoplay"]
 
 
@@ -63,7 +65,7 @@ class Track:
     title: str
     webpage_url: str
     source: str = "unknown"
-    uploader: str = "Unknown artist"
+    uploader: str = message("track.unknown_artist")
     duration: float | None = None
     is_live: bool = False
     thumbnail: str | None = None

@@ -17,6 +17,7 @@ from cachetools import TTLCache
 
 from ..config import Config
 from ..constants import COOKIE_DIR
+from ..messages import message
 from ..models import Track
 from .catalogs import CatalogRouter
 from .http_client import HttpClient, UnsafeUrlError, validate_url
@@ -231,10 +232,16 @@ class Extractor:
         raw_stream = str(info.get("url") or "")
         stream_url = raw_stream if _is_url(raw_stream) and raw_stream != webpage_url else None
         return Track(
-            title=str(info.get("title") or info.get("id") or "Unknown title"),
+            title=str(
+                info.get("title") or info.get("id") or message("track.unknown_title")
+            ),
             webpage_url=str(webpage_url),
             source=extractor,
-            uploader=str(info.get("uploader") or info.get("artist") or "Unknown artist"),
+            uploader=str(
+                info.get("uploader")
+                or info.get("artist")
+                or message("track.unknown_artist")
+            ),
             duration=float(info["duration"]) if info.get("duration") is not None else None,
             is_live=bool(info.get("is_live") or info.get("live_status") == "is_live"),
             thumbnail=_thumbnail_url(info),
@@ -253,7 +260,7 @@ class Extractor:
             raise ResolveError("direct media URL could not be validated") from exc
         if _direct_extension(final) not in DIRECT_EXTENSIONS:
             raise ResolveError("the final direct media URL has no supported extension")
-        title = Path(urlsplit(final).path).name or "Direct media"
+        title = Path(urlsplit(final).path).name or message("track.direct_media")
         return Track(
             title=title,
             webpage_url=final,

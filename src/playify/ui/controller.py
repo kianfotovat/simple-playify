@@ -20,8 +20,10 @@ from .views import QueueView, allowed_interaction
 LOGGER = logging.getLogger(__name__)
 
 
-class AddTrackModal(discord.ui.Modal, title="Add a track"):
-    query = discord.ui.TextInput(label="Link or search", max_length=500)
+class AddTrackModal(discord.ui.Modal, title=message("controller.add.title")):
+    query = discord.ui.TextInput(
+        label=message("controller.add.query"), max_length=500
+    )
 
     def __init__(self, session: PlayerSession, responses: Responses) -> None:
         super().__init__()
@@ -158,7 +160,7 @@ class ControllerView(discord.ui.View):
 
         paused = self.session.state.paused
         self._button(
-            "Previous",
+            message("controller.button.previous"),
             0,
             previous,
             custom_id="previous",
@@ -166,7 +168,7 @@ class ControllerView(discord.ui.View):
             style=discord.ButtonStyle.primary,
         )
         self._button(
-            "Play" if paused else "Pause",
+            message("controller.button.play" if paused else "controller.button.pause"),
             0,
             pause_resume,
             custom_id="play_pause",
@@ -174,7 +176,7 @@ class ControllerView(discord.ui.View):
             style=discord.ButtonStyle.success if paused else discord.ButtonStyle.secondary,
         )
         self._button(
-            "Skip",
+            message("controller.button.skip"),
             0,
             skip,
             custom_id="skip",
@@ -182,7 +184,7 @@ class ControllerView(discord.ui.View):
             style=discord.ButtonStyle.primary,
         )
         self._button(
-            "Stop",
+            message("controller.button.stop"),
             0,
             stop,
             custom_id="stop",
@@ -190,17 +192,35 @@ class ControllerView(discord.ui.View):
             style=discord.ButtonStyle.danger,
         )
         self._button(
-            "✚︎ Add Song",
+            message("controller.button.add"),
             0,
             add,
             custom_id="add",
             style=discord.ButtonStyle.success,
         )
-        self._button("Vol-", 1, volume_down, custom_id="volume_down", emoji="🔉")
-        self._button("Vol+", 1, volume_up, custom_id="volume_up", emoji="🔊")
-        self._button("Shuffle", 1, shuffle, custom_id="shuffle", emoji="🔀")
         self._button(
-            "Loop",
+            message("controller.button.volume_down"),
+            1,
+            volume_down,
+            custom_id="volume_down",
+            emoji="🔉",
+        )
+        self._button(
+            message("controller.button.volume_up"),
+            1,
+            volume_up,
+            custom_id="volume_up",
+            emoji="🔊",
+        )
+        self._button(
+            message("controller.button.shuffle"),
+            1,
+            shuffle,
+            custom_id="shuffle",
+            emoji="🔀",
+        )
+        self._button(
+            message("controller.button.loop"),
             1,
             loop,
             custom_id="loop",
@@ -212,7 +232,7 @@ class ControllerView(discord.ui.View):
             ),
         )
         self._button(
-            "Autoplay",
+            message("controller.button.autoplay"),
             1,
             autoplay,
             custom_id="autoplay",
@@ -224,14 +244,20 @@ class ControllerView(discord.ui.View):
             ),
         )
         self._button(
-            "Show Queue",
+            message("controller.button.queue"),
             2,
             queue,
             custom_id="queue",
             emoji="📜",
             style=discord.ButtonStyle.primary,
         )
-        self._button("Jump To", 2, jump, custom_id="jump", emoji="⤵️")
+        self._button(
+            message("controller.button.jump"),
+            2,
+            jump,
+            custom_id="jump",
+            emoji="⤵️",
+        )
 
 
 class ControllerManager:
@@ -335,31 +361,53 @@ class ControllerManager:
         if current:
             title = safe_text(current.title, 150)
             link = public_canonical_link(current)
-            now = f"[{title}]({link})" if link else title
-            now += f"\n{safe_text(current.uploader, 100)} • {format_time(session.position)}"
+            display_title = (
+                message("controller.current.linked", title=title, link=link)
+                if link
+                else title
+            )
+            now = message(
+                "controller.current.details",
+                title=display_title,
+                uploader=safe_text(current.uploader, 100),
+                position=format_time(session.position),
+            )
             color = 0x57F287 if not session.state.paused else 0xFEE75C
         else:
-            now = "Waiting for a track."
+            now = message("controller.waiting")
             color = 0x5865F2
         next_track = session.state.queue[0] if session.state.queue else None
         up_next = (
-            f"{safe_text(next_track.title, 150)} — {safe_text(next_track.uploader, 100)}"
+            message(
+                "controller.up_next.track",
+                title=safe_text(next_track.title, 150),
+                uploader=safe_text(next_track.uploader, 100),
+            )
             if next_track
-            else "Nothing queued."
+            else message("controller.up_next.empty")
         )
-        up_next += (
-            f"\n{len(session.state.queue)} upcoming • "
-            f"{len(session.state.pending)} pending"
+        up_next += "\n" + message(
+            "controller.up_next.counts",
+            upcoming=len(session.state.queue),
+            pending=len(session.state.pending),
         )
         embed = discord.Embed(
-            title="Now Playing" if current else "Waiting for a Track",
+            title=message(
+                "controller.title.playing" if current else "controller.title.waiting"
+            ),
             description=now,
             color=color,
         )
-        embed.add_field(name="Up Next", value=up_next, inline=False)
+        embed.add_field(
+            name=message("controller.field.up_next"), value=up_next, inline=False
+        )
         source = current.source if current else "idle"
         embed.set_footer(
-            text=f"{source_text(source)} • Volume: {session.state.volume}%"
+            text=message(
+                "controller.footer",
+                source=source_text(source),
+                volume=session.state.volume,
+            )
         )
         if current and current.thumbnail:
             embed.set_thumbnail(url=current.thumbnail)

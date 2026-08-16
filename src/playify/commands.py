@@ -81,49 +81,67 @@ class CommandSuite:
 
     def _register_commands(self) -> None:
         definitions = (
-            ("play", "Play a link or search, or append it to the queue", self.play),
-            ("playnext", "Put a link or search next in the queue", self.playnext),
-            ("search", "Choose a track from search results", self.search),
-            ("pause", "Pause playback", self.pause),
-            ("resume", "Resume playback, including a dormant session", self.resume),
-            ("replay", "Replay the current finite track", self.replay),
-            ("seek", "Seek to a timestamp or open collaborative seek controls", self.seek),
-            ("skip", "Skip the current track", self.skip),
-            ("previous", "Return to the previous track once", self.previous),
-            ("stop", "Stop playback and clear the whole session", self.stop),
-            ("reconnect", "Reconnect a dormant session without resuming", self.reconnect),
-            ("queue", "Show the live committed queue", self.queue),
-            ("remove", "Remove a committed queue entry", self.remove),
-            ("jumpto", "Jump to a committed queue entry", self.jumpto),
-            ("clearqueue", "Clear upcoming tracks and cancel pending imports", self.clearqueue),
-            ("shuffle", "Shuffle committed upcoming tracks", self.shuffle),
-            ("loop", "Toggle looping the current track", self.loop),
-            ("autoplay", "Toggle autoplay or seed it with one track", self.autoplay),
-            ("volume", "Set the current session volume from 0 to 200", self.volume),
-            ("nowplaying", "Show the current or dormant track", self.nowplaying),
-            ("status", "Show Playify's current local status", self.status),
+            ("play", message("command.description.play"), self.play),
+            ("playnext", message("command.description.playnext"), self.playnext),
+            ("search", message("command.description.search"), self.search),
+            ("pause", message("command.description.pause"), self.pause),
+            ("resume", message("command.description.resume"), self.resume),
+            ("replay", message("command.description.replay"), self.replay),
+            ("seek", message("command.description.seek"), self.seek),
+            ("skip", message("command.description.skip"), self.skip),
+            ("previous", message("command.description.previous"), self.previous),
+            ("stop", message("command.description.stop"), self.stop),
+            ("reconnect", message("command.description.reconnect"), self.reconnect),
+            ("queue", message("command.description.queue"), self.queue),
+            ("remove", message("command.description.remove"), self.remove),
+            ("jumpto", message("command.description.jumpto"), self.jumpto),
+            ("clearqueue", message("command.description.clearqueue"), self.clearqueue),
+            ("shuffle", message("command.description.shuffle"), self.shuffle),
+            ("loop", message("command.description.loop"), self.loop),
+            ("autoplay", message("command.description.autoplay"), self.autoplay),
+            ("volume", message("command.description.volume"), self.volume),
+            ("nowplaying", message("command.description.nowplaying"), self.nowplaying),
+            ("status", message("command.description.status"), self.status),
         )
         for definition in definitions:
             self._command(*definition)
 
         setup = app_commands.Group(
             name="setup",
-            description="Manage this server's Playify policy",
+            description=message("command.description.setup"),
             default_permissions=discord.Permissions(manage_guild=True),
         )
         allowlist = app_commands.Group(
-            name="allowlist", description="Manage allowed Playify channels", parent=setup
+            name="allowlist",
+            description=message("command.description.allowlist"),
+            parent=setup,
         )
-        allowlist.command(name="set", description="Replace the channel allowlist")(self.allowlist_set)
-        allowlist.command(name="add", description="Add up to five allowed channels")(self.allowlist_add)
-        allowlist.command(name="remove", description="Remove up to five allowed channels")(self.allowlist_remove)
-        allowlist.command(name="clear", description="Clear the allowlist and allow every channel")(self.allowlist_clear)
-        allowlist.command(name="show", description="Show the effective allowed channels")(self.allowlist_show)
+        allowlist.command(
+            name="set", description=message("command.description.allowlist_set")
+        )(self.allowlist_set)
+        allowlist.command(
+            name="add", description=message("command.description.allowlist_add")
+        )(self.allowlist_add)
+        allowlist.command(
+            name="remove", description=message("command.description.allowlist_remove")
+        )(self.allowlist_remove)
+        allowlist.command(
+            name="clear", description=message("command.description.allowlist_clear")
+        )(self.allowlist_clear)
+        allowlist.command(
+            name="show", description=message("command.description.allowlist_show")
+        )(self.allowlist_show)
         channelmove = app_commands.Group(
-            name="channelmove", description="Configure cross-channel playback moves", parent=setup
+            name="channelmove",
+            description=message("command.description.channelmove"),
+            parent=setup,
         )
-        channelmove.command(name="show", description="Show the channel move mode")(self.channelmove_show)
-        channelmove.command(name="set", description="Set the channel move mode")(self.channelmove_set)
+        channelmove.command(
+            name="show", description=message("command.description.channelmove_show")
+        )(self.channelmove_show)
+        channelmove.command(
+            name="set", description=message("command.description.channelmove_set")
+        )(self.channelmove_set)
         app_commands.guild_only()(setup)
         if hasattr(app_commands, "allowed_installs"):
             app_commands.allowed_installs(guilds=True, users=False)(setup)
@@ -540,7 +558,11 @@ class CommandSuite:
         try:
             enabled = await self.session(interaction.guild_id).toggle_loop()
             await self.app.responses.send(
-                interaction, message("player.loop", state="on" if enabled else "off")
+                interaction,
+                message(
+                    "player.loop",
+                    state=message("common.on" if enabled else "common.off"),
+                ),
             )
         except ValueError:
             await self.app.responses.send(

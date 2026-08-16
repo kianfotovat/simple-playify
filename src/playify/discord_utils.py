@@ -41,8 +41,8 @@ def format_time(seconds: float) -> str:
 
 def duration_text(duration: float | None, *, live: bool = False) -> str:
     if live:
-        return "Live"
-    return format_time(duration) if duration is not None else "Unknown duration"
+        return message("duration.live")
+    return format_time(duration) if duration is not None else message("duration.unknown")
 
 
 def source_text(source: str) -> str:
@@ -50,22 +50,22 @@ def source_text(source: str) -> str:
 
     normalized = source.strip().casefold()
     known = (
-        ("youtube", "YouTube"),
-        ("soundcloud", "SoundCloud"),
-        ("bandcamp", "Bandcamp"),
-        ("twitch", "Twitch"),
-        ("vimeo", "Vimeo"),
-        ("dailymotion", "Dailymotion"),
+        ("youtube", "source.youtube"),
+        ("soundcloud", "source.soundcloud"),
+        ("bandcamp", "source.bandcamp"),
+        ("twitch", "source.twitch"),
+        ("vimeo", "source.vimeo"),
+        ("dailymotion", "source.dailymotion"),
     )
-    for marker, label in known:
+    for marker, key in known:
         if marker in normalized:
-            return label
+            return message(key)
     if normalized in {"direct", "generic"}:
-        return "Direct media"
+        return message("source.direct")
     if normalized in {"", "unknown"}:
-        return "Unknown source"
+        return message("source.unknown")
     if normalized == "idle":
-        return "Idle"
+        return message("source.idle")
     return normalized.replace("_", " ").replace("-", " ").title()
 
 

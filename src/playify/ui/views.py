@@ -13,8 +13,6 @@ from ..messages import message
 from ..models import Track
 from ..services.player import PlayerSession
 
-CLOSE_LABEL = "✖︎ Close"
-
 
 async def allowed_interaction(responses: Responses, interaction: discord.Interaction) -> bool:
     """Apply the current server allowlist to collaborative component interactions."""
@@ -102,14 +100,18 @@ class QueueView(discord.ui.View):
         if self.action in {"remove", "jump"} and visible:
             select = discord.ui.Select(
                 placeholder=(
-                    "Choose a queued track to remove"
+                    message("queue.select.remove")
                     if self.action == "remove"
-                    else "Choose a queued track to jump to"
+                    else message("queue.select.jump")
                 ),
                 options=[
                     discord.SelectOption(
                         label=track.title[:100],
-                        description=f"#{start + index + 1} • {track.uploader}"[:100],
+                        description=message(
+                            "queue.select.description",
+                            number=start + index + 1,
+                            uploader=track.uploader,
+                        )[:100],
                         value=track.occurrence_id,
                     )
                     for index, track in enumerate(visible)
@@ -142,13 +144,13 @@ class QueueView(discord.ui.View):
             self.add_item(select)
 
         previous = discord.ui.Button(
-            label="⬅️ Previous", disabled=self.page == 0, row=1
+            label=message("button.previous_page"), disabled=self.page == 0, row=1
         )
         following = discord.ui.Button(
-            label="Next ➡️", disabled=self.page >= pages - 1, row=1
+            label=message("button.next_page"), disabled=self.page >= pages - 1, row=1
         )
         close = discord.ui.Button(
-            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
+            label=message("button.close"), style=discord.ButtonStyle.danger, row=1
         )
 
         async def go_previous(interaction: discord.Interaction) -> None:
@@ -198,15 +200,30 @@ class QueueView(discord.ui.View):
         visible = tracks[start : start + 10]
         if visible:
             lines = [
-                f"`{start + index + 1}` {safe_text(track.title, 90)} — {safe_text(track.uploader, 50)}"
+                message(
+                    "queue.line",
+                    number=start + index + 1,
+                    title=safe_text(track.title, 90),
+                    uploader=safe_text(track.uploader, 50),
+                )
                 for index, track in enumerate(visible)
             ]
         else:
-            lines = ["The committed queue is empty."]
+            lines = [message("queue.empty")]
         pending = len(self.session.state.pending)
-        embed = discord.Embed(title="Queue", description="\n".join(lines), color=0x5865F2)
+        embed = discord.Embed(
+            title=message("queue.title"),
+            description="\n".join(lines),
+            color=0x5865F2,
+        )
         embed.set_footer(
-            text=f"Page {self.page + 1}/{pages} • {len(tracks)} queued • {pending} pending"
+            text=message(
+                "queue.footer",
+                page=self.page + 1,
+                pages=pages,
+                queued=len(tracks),
+                pending=pending,
+            )
         )
         return embed
 
@@ -223,12 +240,14 @@ class SearchView(discord.ui.LayoutView):
         self.responses = responses
         self.message: discord.Message | None = None
         container = discord.ui.Container(accent_color=0x5865F2)
-        container.add_item(discord.ui.TextDisplay("## Search Results"))
+        container.add_item(discord.ui.TextDisplay(message("search.title")))
         for index, track in enumerate(self.tracks):
-            details = (
-                f"**{index + 1}. {safe_text(track.title, 100)}**\n"
-                f"{safe_text(track.uploader, 60)} • "
-                f"{duration_text(track.duration, live=track.is_live)}"
+            details = message(
+                "search.result",
+                number=index + 1,
+                title=safe_text(track.title, 100),
+                uploader=safe_text(track.uploader, 60),
+                duration=duration_text(track.duration, live=track.is_live),
             )
             if track.thumbnail:
                 container.add_item(
@@ -236,20 +255,25 @@ class SearchView(discord.ui.LayoutView):
                         details,
                         accessory=discord.ui.Thumbnail(
                             track.thumbnail,
-                            description=f"Artwork for {safe_text(track.title, 80)}",
+                            description=message(
+                                "search.artwork", title=safe_text(track.title, 80)
+                            ),
                         ),
                     )
                 )
             else:
                 container.add_item(discord.ui.TextDisplay(details))
         select = discord.ui.Select(
-            placeholder="Choose a result",
+            placeholder=message("search.select"),
             options=[
                 discord.SelectOption(
-                    label=f"{index + 1}. {track.title}"[:100],
-                    description=(
-                        f"{track.uploader} • "
-                        f"{duration_text(track.duration, live=track.is_live)}"
+                    label=message(
+                        "search.option", number=index + 1, title=track.title
+                    )[:100],
+                    description=message(
+                        "search.option_description",
+                        uploader=track.uploader,
+                        duration=duration_text(track.duration, live=track.is_live),
                     )[:100],
                     value=str(index),
                 )
@@ -263,7 +287,9 @@ class SearchView(discord.ui.LayoutView):
 
         select.callback = selected
         container.add_item(discord.ui.ActionRow(select))
-        close = discord.ui.Button(label=CLOSE_LABEL, style=discord.ButtonStyle.danger)
+        close = discord.ui.Button(
+            label=message("button.close"), style=discord.ButtonStyle.danger
+        )
 
         async def close_view(interaction: discord.Interaction) -> None:
             await dismiss_message(self, self.responses, interaction, self.message)
@@ -293,10 +319,10 @@ def _parse_timestamp(value: str) -> float:
     )
 
 
-class SeekTimestampModal(discord.ui.Modal, title="Jump To"):
+class SeekTimestampModal(discord.ui.Modal, title=message("seek.modal.title")):
     timestamp = discord.ui.TextInput(
-        label="Timestamp",
-        placeholder="For example: 1:23 or 45",
+        label=message("seek.modal.label"),
+        placeholder=message("seek.modal.placeholder"),
         max_length=8,
     )
 
@@ -334,10 +360,10 @@ class SeekView(discord.ui.View):
         self.message: discord.Message | None = None
         self.ticker: asyncio.Task[None] | None = None
         for delta, label, emoji in (
-            (-30, "30s", "⏪"),
-            (-10, "10s", "◀️"),
-            (10, "10s", "▶️"),
-            (30, "30s", "⏩"),
+            (-30, message("seek.button.thirty"), "⏪"),
+            (-10, message("seek.button.ten"), "◀️"),
+            (10, message("seek.button.ten"), "▶️"),
+            (30, message("seek.button.thirty"), "⏩"),
         ):
             button = discord.ui.Button(
                 label=label,
@@ -352,7 +378,9 @@ class SeekView(discord.ui.View):
 
             button.callback = move
             self.add_item(button)
-        jump = discord.ui.Button(label="Jump To", emoji="✏️", row=1)
+        jump = discord.ui.Button(
+            label=message("seek.button.jump"), emoji="✏️", row=1
+        )
 
         async def jump_to(interaction: discord.Interaction) -> None:
             await interaction.response.send_modal(SeekTimestampModal(self))
@@ -361,7 +389,7 @@ class SeekView(discord.ui.View):
         self.add_item(jump)
 
         close = discord.ui.Button(
-            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
+            label=message("button.close"), style=discord.ButtonStyle.danger, row=1
         )
 
         async def close_view(interaction: discord.Interaction) -> None:
@@ -390,15 +418,19 @@ class SeekView(discord.ui.View):
         duration = track.duration if track else None
         label = format_time(position)
         if duration is not None:
-            label += f" / {format_time(duration)}"
+            label = message(
+                "seek.position", position=label, duration=format_time(duration)
+            )
         if duration:
             bar = progress_bar(position / duration, segments=30)
         else:
             bar = progress_bar(0, segments=30)
-        title = safe_text(track.title, 150) if track else "Nothing playing"
+        title = safe_text(track.title, 150) if track else message("seek.nothing")
         return discord.Embed(
-            title="Seek",
-            description=f"**{title}**\n\n`[{bar}]`\n**{label}**",
+            title=message("seek.title"),
+            description=message(
+                "seek.description", title=title, bar=bar, position=label
+            ),
             color=0x5865F2,
         )
 
@@ -440,10 +472,10 @@ class ChannelPaginator(discord.ui.View):
         self.responses = responses
         self.message: discord.Message | None = None
         self.page = 0
-        previous = discord.ui.Button(label="⬅️ Previous")
-        following = discord.ui.Button(label="Next ➡️")
+        previous = discord.ui.Button(label=message("button.previous_page"))
+        following = discord.ui.Button(label=message("button.next_page"))
         close = discord.ui.Button(
-            label=CLOSE_LABEL, style=discord.ButtonStyle.danger
+            label=message("button.close"), style=discord.ButtonStyle.danger
         )
 
         def update_disabled() -> None:
@@ -478,7 +510,15 @@ class ChannelPaginator(discord.ui.View):
     def embed(self) -> discord.Embed:
         pages = max(1, math.ceil(len(self.channels) / 10))
         visible = self.channels[self.page * 10 : self.page * 10 + 10]
-        description = "\n".join(channel.mention for channel in visible) or "No channels."
-        embed = discord.Embed(title="Playify channels", description=description, color=0x5865F2)
-        embed.set_footer(text=f"Page {self.page + 1}/{pages}")
+        description = "\n".join(channel.mention for channel in visible) or message(
+            "channels.empty"
+        )
+        embed = discord.Embed(
+            title=message("channels.title"),
+            description=description,
+            color=0x5865F2,
+        )
+        embed.set_footer(
+            text=message("channels.footer", page=self.page + 1, pages=pages)
+        )
         return embed
