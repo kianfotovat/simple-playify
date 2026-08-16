@@ -27,7 +27,7 @@ MESSAGES: dict[str, str] = {
     "bootstrap.building": "Building a validated Python environment…",
     "bootstrap.stage_failed": "The staged environment failed validation; the previous environment was restored.",
     "bootstrap.host_unsupported": "Playify V2 supports Windows or Linux on x86-64 only.",
-    "bootstrap.python_unsupported": "Playify requires Python 3.12, 3.13, or 3.14.",
+    "bootstrap.python_unsupported": "Playify requires Python 3.11 or newer.",
     "bootstrap.requirements_missing": "requirements.txt is missing.",
     "bootstrap.data_initialize_failed": "Could not initialize the data files: {error}",
     "bootstrap.data_invalid": "{path} was invalid. It was backed up to {backup} and rebuilt.",

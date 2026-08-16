@@ -30,7 +30,7 @@ SETTINGS = DATA / "settings.json"
 INSTALLATION = DATA / "installation.json"
 REQUIREMENTS = ROOT / "requirements.txt"
 OWNERSHIP_MARKER = ".playify-runtime.json"
-SUPPORTED = {(3, 12), (3, 13), (3, 14)}
+MINIMUM_PYTHON = (3, 11)
 IMPORT_CHECK = (
     "import aiohttp, aiosqlite, cachetools, discord, dotenv, psutil, rich, spotipy, spotify_scraper, yt_dlp; "
     "import nacl, davey"
@@ -112,7 +112,7 @@ def _python_supported(executable: Path) -> bool:
                 str(executable),
                 "-c",
                 "import platform,sys; raise SystemExit(0 if "
-                "sys.version_info[:2] in {(3,12),(3,13),(3,14)} and "
+                "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) and "
                 "platform.machine().lower() in {'amd64','x86_64'} else 1)",
             ],
             cwd=ROOT,
@@ -427,7 +427,7 @@ def environment_valid(path: Path) -> bool:
                 str(python),
                 "-c",
                 "import sys; raise SystemExit(0 if "
-                "sys.version_info[:2] in {(3,12),(3,13),(3,14)} else 1)",
+                "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) else 1)",
             ],
             cwd=ROOT,
             capture_output=True,
@@ -635,7 +635,7 @@ def _launch_tui(runtime: Path, base_python: Path) -> NoReturn:
 def main() -> None:
     if not supported_host():
         fail(message("bootstrap.host_unsupported"))
-    if sys.version_info[:2] not in SUPPORTED:
+    if sys.version_info.major != 3 or sys.version_info[:2] < MINIMUM_PYTHON:
         fail(message("bootstrap.python_unsupported"))
     if not REQUIREMENTS.is_file():
         fail(message("bootstrap.requirements_missing"))

@@ -34,7 +34,7 @@ This repository is a fork of [alan7383/playify](https://github.com/alan7383/play
 | Discord UI | Traditional embeds, interactive views, and `/play` autocomplete | Redesigned controller and command views with artwork, one-second playback/seek updates, automatic queue refreshes, and short-lived responses |
 | Server policy | A replace-or-reset channel allowlist | Set/add/remove/clear/show allowlist commands plus `allow` and `protect` policies for moving playback between channels |
 | Persistence | Playback and server settings are saved | Full playback persistence or a Settings-only mode that discards playback state |
-| Installation and updates | ZIP-based updater, Docker configuration, and Python 3.9+ support | Managed Python 3.12–3.14 environment, managed FFmpeg maintenance, and confirmation-based Git updates; no Docker setup |
+| Installation and updates | ZIP-based updater, Docker configuration, and Python 3.9+ support | Managed Python 3.11+ environment, managed FFmpeg maintenance, and confirmation-based Git updates; no Docker setup |
 
 ### Added or substantially changed in this fork
 
@@ -61,7 +61,7 @@ This repository is a fork of [alan7383/playify](https://github.com/alan7383/play
 ## Requirements
 
 - Windows 10/11 x64 or Linux x86-64
-- Python 3.12, 3.13, or 3.14
+- Python 3.11 or newer
 - Git
 - A Discord bot token
 
