@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from rich.console import Console
 from rich.prompt import Prompt
-from rich.table import Table
+from rich.text import Text
 
 from src.playify.config import Config
 from src.playify.messages import message
 
 from .key_input import ask_with_escape
+from .menu import menu_layout
 
 CHOICES = {
     "persistence_mode": ["full", "settings"],
@@ -55,6 +56,34 @@ def _display(value) -> str:
     return str(value)
 
 
+def _label(key: str) -> str:
+    return message(f"tui.settings.label.{key}")
+
+
+def _settings_menu(console: Console, restart_required: str | None) -> str:
+    footer = Text()
+    footer.append(f"1–{len(ROWS)}", style="brand")
+    footer.append(f" {message('tui.menu.select')}   ", style="dash.muted")
+    footer.append("Esc", style="brand")
+    footer.append(f" {message('tui.menu.back')}", style="dash.muted")
+    rows = (
+        (str(index), _label(key), _display(Config.get(key)), f"{category} · {description}", "dash.text")
+        for index, (category, key, description) in enumerate(ROWS, 1)
+    )
+    console.clear()
+    console.print(
+        menu_layout(
+            message("tui.settings.title"),
+            message("tui.settings.subtitle"),
+            rows,
+            footer,
+        )
+    )
+    if restart_required:
+        console.print(message("tui.settings.restart_required", scope=restart_required))
+    return ask_with_escape(console, message("tui.settings.select"), default="esc")
+
+
 def _convert(key: str, raw: str):
     if key in {"updates_enabled", "soundcloud_fallback"}:
         return raw == "true"
@@ -80,30 +109,20 @@ def run_settings(console: Console) -> str | None:
     Config.reload()
     restart_required: str | None = None
     while True:
-        table = Table(title=message("tui.settings.title"), show_lines=False)
-        table.add_column("#", justify="right")
-        table.add_column(message("tui.settings.column.category"))
-        table.add_column(message("tui.settings.column.setting"))
-        table.add_column(message("tui.settings.column.current"))
-        table.add_column(message("tui.settings.column.purpose"))
-        for index, (category, key, description) in enumerate(ROWS, 1):
-            table.add_row(str(index), category, key, _display(Config.get(key)), description)
-        console.clear()
-        console.print(table)
-        if restart_required:
-            console.print(message("tui.settings.restart_required", scope=restart_required))
-        selection = ask_with_escape(console, message("tui.settings.select"), default="esc")
+        selection = _settings_menu(console, restart_required)
         if selection in {"esc", "q", "back"}:
             return restart_required
         try:
             index = int(selection) - 1
+            if not 0 <= index < len(ROWS):
+                continue
             _, key, _ = ROWS[index]
         except (ValueError, IndexError):
             continue
         current = Config.get(key)
         choices = CHOICES.get(key)
         raw = Prompt.ask(
-            message("tui.settings.new", setting=key),
+            message("tui.settings.new", setting=_label(key)),
             choices=choices,
             default=_display(current) if not isinstance(current, list) else ",".join(current),
         )

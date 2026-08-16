@@ -15,9 +15,13 @@ import discord
 from dotenv import dotenv_values
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
+from rich.text import Text
 
 from src.playify.constants import HTTP_USER_AGENT
 from src.playify.messages import message
+
+from .key_input import ask_with_escape, wait_for_key
+from .menu import menu_layout
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -116,11 +120,66 @@ def invite_url(application_id: str, *, stage_moderation: bool) -> str:
     )
 
 
-def run_wizard(console: Console, project_root: Path) -> bool:
-    path = project_root / ".env"
-    current = load_env(path)
-    console.print(message("tui.wizard.title"))
-    console.print(message("tui.wizard.notice"))
+def _status(configured: bool) -> tuple[str, str]:
+    key = "configured" if configured else "missing"
+    return message(f"tui.wizard.status.{key}"), "success" if configured else "warning"
+
+
+def _menu(console: Console, current: dict[str, str]) -> str:
+    discord_status, discord_style = _status(bool(current.get("DISCORD_TOKEN")))
+    spotify_values = (current.get("SPOTIFY_CLIENT_ID"), current.get("SPOTIFY_CLIENT_SECRET"))
+    spotify_status, spotify_style = _status(all(spotify_values))
+    if any(spotify_values) and not all(spotify_values):
+        spotify_status = message("tui.wizard.status.incomplete")
+        spotify_style = "error"
+    invite_ready = bool(current.get("DISCORD_TOKEN"))
+    invite_status = message(f"tui.wizard.status.{'available' if invite_ready else 'unavailable'}")
+    footer = Text()
+    footer.append("1–3", style="brand")
+    footer.append(f" {message('tui.menu.select')}   ", style="dash.muted")
+    footer.append("Esc", style="brand")
+    footer.append(f" {message('tui.menu.back')}", style="dash.muted")
+    rows = (
+        (
+            "1",
+            message("tui.wizard.option.discord"),
+            discord_status,
+            message("tui.wizard.option.discord_help"),
+            discord_style,
+        ),
+        (
+            "2",
+            message("tui.wizard.option.spotify"),
+            spotify_status,
+            message("tui.wizard.option.spotify_help"),
+            spotify_style,
+        ),
+        (
+            "3",
+            message("tui.wizard.option.invite"),
+            invite_status,
+            message("tui.wizard.option.invite_help"),
+            "info" if invite_ready else "muted",
+        ),
+    )
+    console.clear()
+    console.print(
+        menu_layout(
+            message("tui.wizard.menu_title"),
+            message("tui.wizard.notice"),
+            rows,
+            footer,
+        )
+    )
+    return ask_with_escape(
+        console,
+        message("tui.wizard.select"),
+        choices=["1", "2", "3", "esc"],
+        default="esc",
+    )
+
+
+def _configure_discord(console: Console, path: Path, current: dict[str, str]) -> tuple[bool, str | None]:
     token = Prompt.ask(
         message("tui.wizard.discord_token"),
         password=True,
@@ -131,13 +190,25 @@ def run_wizard(console: Console, project_root: Path) -> bool:
         token = current.get("DISCORD_TOKEN", "")
     if not token:
         console.print(message("tui.wizard.discord_required"))
-        return False
+        wait_for_key(console)
+        return False, None
     status, application_id = verify_discord(token)
     if status == "invalid":
         console.print(message("tui.wizard.discord_rejected"))
-        return False
+        wait_for_key(console)
+        return False, None
     if status == "network" and not Confirm.ask(message("tui.wizard.discord_unverified"), default=False):
-        return False
+        return False, None
+    changed = token != current.get("DISCORD_TOKEN", "")
+    save_env(path, {"DISCORD_TOKEN": token})
+    current["DISCORD_TOKEN"] = token
+    console.print(message("tui.wizard.saved"))
+    if not application_id:
+        wait_for_key(console)
+    return changed, application_id
+
+
+def _configure_spotify(console: Console, path: Path, current: dict[str, str]) -> bool:
 
     spotify_id = Prompt.ask(
         message("tui.wizard.spotify_id"),
@@ -157,27 +228,75 @@ def run_wizard(console: Console, project_root: Path) -> bool:
         spotify_secret = current.get("SPOTIFY_CLIENT_SECRET", "")
     if bool(spotify_id) != bool(spotify_secret):
         console.print(message("tui.wizard.spotify_pair"))
+        wait_for_key(console)
         return False
     if spotify_id:
         spotify_status = verify_spotify(spotify_id, spotify_secret)
         if spotify_status == "invalid":
             console.print(message("tui.wizard.spotify_rejected"))
+            wait_for_key(console)
             return False
         if spotify_status == "network" and not Confirm.ask(message("tui.wizard.spotify_unverified"), default=False):
             return False
-
+    changed = (
+        spotify_id != current.get("SPOTIFY_CLIENT_ID", "")
+        or spotify_secret != current.get("SPOTIFY_CLIENT_SECRET", "")
+    )
     save_env(
         path,
         {
-            "DISCORD_TOKEN": token,
             "SPOTIFY_CLIENT_ID": spotify_id,
             "SPOTIFY_CLIENT_SECRET": spotify_secret,
         },
     )
+    current["SPOTIFY_CLIENT_ID"] = spotify_id
+    current["SPOTIFY_CLIENT_SECRET"] = spotify_secret
     console.print(message("tui.wizard.saved"))
-    if application_id:
-        stage = Confirm.ask(message("tui.wizard.stage_permission"), default=False)
-        url = invite_url(application_id, stage_moderation=stage)
-        console.print(message("tui.wizard.invite"))
-        console.print(f"[link={url}]{url}[/link]")
-    return True
+    wait_for_key(console)
+    return changed
+
+
+def _show_invite(console: Console, application_id: str) -> None:
+    stage = Confirm.ask(message("tui.wizard.stage_permission"), default=False)
+    url = invite_url(application_id, stage_moderation=stage)
+    console.print(message("tui.wizard.invite"))
+    console.print(f"[link={url}]{url}[/link]")
+    wait_for_key(console, message("tui.wizard.invite_continue"))
+
+
+def _invite_from_current_token(console: Console, current: dict[str, str]) -> None:
+    token = current.get("DISCORD_TOKEN", "")
+    if not token:
+        console.print(message("tui.wizard.invite_unavailable"))
+        wait_for_key(console)
+        return
+    status, application_id = verify_discord(token)
+    if status == "invalid":
+        console.print(message("tui.wizard.discord_rejected"))
+    elif status == "network" or not application_id:
+        console.print(message("tui.wizard.invite_verify_failed"))
+    else:
+        _show_invite(console, application_id)
+        return
+    wait_for_key(console)
+
+
+def run_wizard(console: Console, project_root: Path) -> bool:
+    """Run the credential menu and report whether any saved value changed."""
+
+    path = project_root / ".env"
+    current = load_env(path)
+    changed = False
+    while True:
+        selection = _menu(console, current)
+        if selection == "esc":
+            return changed
+        if selection == "1":
+            discord_changed, application_id = _configure_discord(console, path, current)
+            changed = changed or discord_changed
+            if application_id:
+                _show_invite(console, application_id)
+        elif selection == "2":
+            changed = _configure_spotify(console, path, current) or changed
+        elif selection == "3":
+            _invite_from_current_token(console, current)

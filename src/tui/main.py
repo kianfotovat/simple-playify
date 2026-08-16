@@ -141,6 +141,7 @@ def main() -> None:
     try:
         while True:
             action = run_dashboard(console, bot)
+            console.clear()
             if action == "config":
                 if run_wizard(console, PROJECT_ROOT):
                     bot.metrics["restart_required"] = message("tui.scope.bot")
