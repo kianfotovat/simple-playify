@@ -16,6 +16,8 @@ from dotenv import dotenv_values
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from src.playify.messages import message
+
 USER_AGENT = "Playify/2.1 (+https://github.com/kianfotovat/simple-playify)"
 
 
@@ -125,10 +127,10 @@ def invite_url(application_id: str, *, stage_moderation: bool) -> str:
 def run_wizard(console: Console, project_root: Path) -> bool:
     path = project_root / ".env"
     current = load_env(path)
-    console.print("\n[title]Bot configuration[/]")
-    console.print("Values are hidden while you type. Existing comments and unknown keys are preserved.")
+    console.print(message("tui.wizard.title"))
+    console.print(message("tui.wizard.notice"))
     token = Prompt.ask(
-        "Discord bot token (Enter keeps the current value)",
+        message("tui.wizard.discord_token"),
         password=True,
         default="" if not current.get("DISCORD_TOKEN") else "__KEEP__",
         show_default=False,
@@ -136,25 +138,25 @@ def run_wizard(console: Console, project_root: Path) -> bool:
     if token == "__KEEP__":
         token = current.get("DISCORD_TOKEN", "")
     if not token:
-        console.print("[error]A Discord token is required.[/]")
+        console.print(message("tui.wizard.discord_required"))
         return False
     status, application_id = verify_discord(token)
     if status == "invalid":
-        console.print("[error]Discord rejected that token; nothing was saved.[/]")
+        console.print(message("tui.wizard.discord_rejected"))
         return False
     if status == "network" and not Confirm.ask(
-        "Discord could not be reached. Save the unverified token anyway?", default=False
+        message("tui.wizard.discord_unverified"), default=False
     ):
         return False
 
     spotify_id = Prompt.ask(
-        "Spotify client ID (optional; Enter keeps current)",
+        message("tui.wizard.spotify_id"),
         password=True,
         default="__KEEP__" if current.get("SPOTIFY_CLIENT_ID") else "",
         show_default=False,
     )
     spotify_secret = Prompt.ask(
-        "Spotify client secret (optional; Enter keeps current)",
+        message("tui.wizard.spotify_secret"),
         password=True,
         default="__KEEP__" if current.get("SPOTIFY_CLIENT_SECRET") else "",
         show_default=False,
@@ -164,15 +166,15 @@ def run_wizard(console: Console, project_root: Path) -> bool:
     if spotify_secret == "__KEEP__":
         spotify_secret = current.get("SPOTIFY_CLIENT_SECRET", "")
     if bool(spotify_id) != bool(spotify_secret):
-        console.print("[error]Spotify client ID and secret must be set or cleared together.[/]")
+        console.print(message("tui.wizard.spotify_pair"))
         return False
     if spotify_id:
         spotify_status = verify_spotify(spotify_id, spotify_secret)
         if spotify_status == "invalid":
-            console.print("[error]Spotify rejected those credentials; nothing was saved.[/]")
+            console.print(message("tui.wizard.spotify_rejected"))
             return False
         if spotify_status == "network" and not Confirm.ask(
-            "Spotify could not be reached. Save the unverified pair anyway?", default=False
+            message("tui.wizard.spotify_unverified"), default=False
         ):
             return False
 
@@ -184,10 +186,10 @@ def run_wizard(console: Console, project_root: Path) -> bool:
             "SPOTIFY_CLIENT_SECRET": spotify_secret,
         },
     )
-    console.print("[success]Configuration saved atomically. Restart the bot to apply it.[/]")
+    console.print(message("tui.wizard.saved"))
     if application_id:
-        stage = Confirm.ask("Include Stage moderation permission in the invite?", default=False)
+        stage = Confirm.ask(message("tui.wizard.stage_permission"), default=False)
         url = invite_url(application_id, stage_moderation=stage)
-        console.print("\nInvite URL (copy it; Playify will not open a browser):")
+        console.print(message("tui.wizard.invite"))
         console.print(f"[link={url}]{url}[/link]")
     return True

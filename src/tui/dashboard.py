@@ -16,6 +16,7 @@ from rich.text import Text
 
 from src.playify.config import Config
 from src.playify.constants import display_version
+from src.playify.messages import message
 
 from .bot_process import BotProcess
 from .key_input import read_key, terminal_mode
@@ -35,31 +36,44 @@ def refresh_rate() -> int:
 def _metrics(bot: BotProcess) -> Panel:
     memory, ffmpeg = bot.process_metrics()
     values = [
-        ("Uptime", bot.uptime),
-        ("Memory", f"{memory:.1f} MB"),
-        ("Servers", str(bot.metrics.get("servers", 0))),
-        ("Players", str(bot.metrics.get("players", 0))),
-        ("Queued", str(bot.metrics.get("queued", 0))),
-        ("FFmpeg", str(ffmpeg)),
-        ("Cache", str(bot.metrics.get("cache", 0))),
-        ("Crashes", str(bot.crash_count)),
+        (message("tui.dashboard.metric.uptime"), bot.uptime),
+        (message("tui.dashboard.metric.memory"), f"{memory:.1f} MB"),
+        (message("tui.dashboard.metric.servers"), str(bot.metrics.get("servers", 0))),
+        (message("tui.dashboard.metric.players"), str(bot.metrics.get("players", 0))),
+        (message("tui.dashboard.metric.queued"), str(bot.metrics.get("queued", 0))),
+        (message("tui.dashboard.metric.ffmpeg"), str(ffmpeg)),
+        (message("tui.dashboard.metric.cache"), str(bot.metrics.get("cache", 0))),
+        (message("tui.dashboard.metric.crashes"), str(bot.crash_count)),
     ]
     cards = [Panel(f"[bold]{value}[/]", title=label, width=15) for label, value in values]
-    return Panel(Columns(cards, equal=True, expand=True), title="Runtime", border_style="blue")
+    return Panel(
+        Columns(cards, equal=True, expand=True),
+        title=message("tui.dashboard.runtime"),
+        border_style="blue",
+    )
 
 
 def _now_playing(bot: BotProcess) -> Panel:
     player = bot.now_playing()
     if not player:
-        content = "No active or dormant track."
+        content = message("tui.dashboard.no_track")
     else:
-        state = "active" if player.get("active") else "dormant"
-        content = (
-            f"[bold]{player.get('track') or 'Unknown track'}[/]  [{state}]\n"
-            f"Guild {player.get('guild_id')} • {player.get('queued', 0)} queued • "
-            f"{player.get('pending', 0)} pending"
+        state = message(
+            "tui.dashboard.state.active"
+            if player.get("active")
+            else "tui.dashboard.state.dormant"
         )
-    return Panel(content, title="Now Playing", border_style="cyan")
+        content = message(
+            "tui.dashboard.track",
+            track=player.get("track") or message("tui.dashboard.unknown_track"),
+            state=state,
+            guild=player.get("guild_id"),
+            queued=player.get("queued", 0),
+            pending=player.get("pending", 0),
+        )
+    return Panel(
+        content, title=message("controller.title.playing"), border_style="cyan"
+    )
 
 
 def _logs(bot: BotProcess, height: int) -> Panel:
@@ -69,7 +83,12 @@ def _logs(bot: BotProcess, height: int) -> Panel:
         style = "red" if "ERROR" in line or "CRITICAL" in line else "yellow" if "WARNING" in line else "white"
         text.append(line, style=style)
         text.append("\n")
-    return Panel(text, title="Recent logs", border_style="bright_black", height=height + 2)
+    return Panel(
+        text,
+        title=message("tui.dashboard.logs.recent"),
+        border_style="bright_black",
+        height=height + 2,
+    )
 
 
 def _dashboard(bot: BotProcess, width: int, height: int):
@@ -78,22 +97,39 @@ def _dashboard(bot: BotProcess, width: int, height: int):
     size = f"{width}x{height}" if ascii_symbols else f"{width}×{height}"
     if width < 100 or height < 30:
         return Panel(
-            f"Resize the terminal to at least 100x30. Current size: {size}"
-            if ascii_symbols
-            else f"Resize the terminal to at least 100×30. Current size: {size}",
+            message(
+                "tui.dashboard.resize",
+                minimum="100x30" if ascii_symbols else "100×30",
+                size=size,
+            ),
             title="Playify",
             border_style="yellow",
         )
-    status = "ONLINE" if bot.is_online else "STARTING" if bot.is_running else "OFFLINE"
+    status = message(
+        "tui.dashboard.status.online"
+        if bot.is_online
+        else "tui.dashboard.status.starting"
+        if bot.is_running
+        else "tui.dashboard.status.offline"
+    )
     restart = bot.metrics.get("restart_required")
-    badge = f"{separator}[yellow]{restart} restart required[/]" if restart else ""
+    badge = (
+        separator + message("tui.dashboard.restart_badge", scope=restart)
+        if restart
+        else ""
+    )
     header = Panel(
-        f"[bold cyan]Playify {display_version()}[/]{separator}{status}{badge}",
+        message(
+            "tui.dashboard.header",
+            version=display_version(),
+            separator=separator,
+            status=status,
+            badge=badge,
+        ),
         border_style="blue",
     )
     hotkeys = Panel(
-        "[bold]L[/] Logs  [bold]C[/] Config  [bold]S[/] Settings  "
-        "[bold]U[/] Update  [bold]M[/] Maintenance  [bold]R[/] Restart  [bold]Q[/] Quit",
+        message("tui.dashboard.hotkeys"),
         border_style="bright_black",
     )
     log_height = max(4, height - 20)
@@ -101,8 +137,8 @@ def _dashboard(bot: BotProcess, width: int, height: int):
     if not bot.is_running:
         items.append(
             Panel(
-                f"Bot exited with code {bot.last_exit_code}. Press R to restart; Playify will not loop automatically.",
-                title="Bot offline",
+                message("tui.dashboard.bot_exited", code=bot.last_exit_code),
+                title=message("tui.dashboard.bot_offline"),
                 border_style="red",
             )
         )
@@ -123,11 +159,25 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
                 offset = max(0, len(lines) - page)
             visible = lines[offset : offset + page]
             text = Text("\n".join(visible), overflow="fold", no_wrap=False)
-            footer = (
-                f"↑/↓ scroll • PgUp/PgDn • Home/End • L/Esc back • "
-                f"{'following' if following else 'paused'} • {offset + 1}-{min(len(lines), offset + page)}/{len(lines)}"
+            footer = message(
+                "tui.dashboard.logs.footer",
+                state=message(
+                    "tui.dashboard.logs.following"
+                    if following
+                    else "tui.dashboard.logs.paused"
+                ),
+                start=offset + 1,
+                end=min(len(lines), offset + page),
+                total=len(lines),
             )
-            live.update(Panel(text, title="Full logs", subtitle=footer), refresh=True)
+            live.update(
+                Panel(
+                    text,
+                    title=message("tui.dashboard.logs.full"),
+                    subtitle=footer,
+                ),
+                refresh=True,
+            )
             key = read_key()
             if key in {"l", "esc"}:
                 return

@@ -12,6 +12,7 @@ from rich.prompt import Confirm, Prompt
 from src.playify.config import Config
 from src.playify.constants import PROJECT_ROOT, display_version
 from src.playify.logging_utils import configure_logging
+from src.playify.messages import message
 
 from .bot_process import BotProcess
 from .dashboard import run_dashboard
@@ -44,7 +45,7 @@ def _stop_with_choice(console: Console, bot: BotProcess) -> bool:
     if bot.wait_for_stop(15):
         return True
     choice = Prompt.ask(
-        "The bot did not stop in 15 seconds",
+        message("tui.main.stop_timeout"),
         choices=["force", "wait", "cancel"],
         default="wait",
     )
@@ -63,7 +64,7 @@ def _start_bot(console: Console, bot: BotProcess) -> str:
         if state != "timeout":
             return state
         if not Confirm.ask(
-            "Discord startup is still pending after 30 seconds. Keep waiting?", default=True
+            message("tui.main.start_pending"), default=True
         ):
             _stop_with_choice(console, bot)
             return "stopped"
@@ -74,12 +75,20 @@ def _perform_update(console: Console, status, action: str) -> None:
 
     operation = rollback_update if action == "rollback" else install_update
     success, detail = operation(PROJECT_ROOT, status)
-    verb = "Rolled back to" if action == "rollback" else "Updated to"
-    console.print(
-        f"[{'success' if success else 'error'}]"
-        f"{verb + ' ' + detail if success else 'Operation failed: ' + detail}[/]"
+    result = (
+        message(
+            "tui.main.update.rolled_back"
+            if action == "rollback"
+            else "tui.main.update.updated",
+            revision=detail,
+        )
+        if success
+        else message("tui.main.update.failed", detail=detail)
     )
-    wait_for_key(console, "Press any key or Esc to restart the launcher…")
+    console.print(
+        f"[{'success' if success else 'error'}]{result}[/]"
+    )
+    wait_for_key(console, message("tui.key.restart_launcher"))
     raise SystemExit(0 if success else 1)
 
 
@@ -100,7 +109,7 @@ def main() -> None:
     console.clear()
     console.print(
         Panel(
-            f"[bold cyan]PLAYIFY[/]\n{display_version()}\nTUI-only self-hosted Discord music bot",
+            message("tui.main.banner", version=display_version()),
             border_style="blue",
         )
     )
@@ -108,11 +117,13 @@ def main() -> None:
 
     ffmpeg, source = locate_ffmpeg()
     if ffmpeg is None:
-        console.print("[warning]No functional FFmpeg was found in bin/ or PATH.[/]")
-        if not Confirm.ask("Install the managed BtbN build now?", default=True) or not install_ffmpeg(console):
+        console.print(message("tui.main.ffmpeg_missing"))
+        if not Confirm.ask(
+            message("tui.main.ffmpeg_install"), default=True
+        ) or not install_ffmpeg(console):
             raise SystemExit(1)
     elif source == "managed" and managed_ffmpeg_due():
-        console.print("[info]Managed FFmpeg is due for its optional monthly maintenance check (M).[/]")
+        console.print(message("tui.main.ffmpeg_due"))
 
     if not _has_token() and not run_wizard(console, PROJECT_ROOT):
         raise SystemExit(2)
@@ -122,30 +133,35 @@ def main() -> None:
     python = Path(sys.executable).resolve()
     expected = (PROJECT_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")).resolve()
     if python != expected:
-        console.print("[error]The TUI must run with Playify's exact .venv interpreter.[/]")
+        console.print(message("tui.main.venv_required"))
         raise SystemExit(1)
 
     bot = BotProcess(PROJECT_ROOT, python)
     startup = _start_bot(console, bot)
     if startup not in {"online", "timeout"}:
-        console.print(Panel("\n".join(bot.recent_logs(20)) or "No bot output.", title="Bot failed to start"))
-        wait_for_key(console, "Press any key or Esc to continue to the offline dashboard…")
+        console.print(
+            Panel(
+                "\n".join(bot.recent_logs(20)) or message("tui.main.no_output"),
+                title=message("tui.main.start_failed"),
+            )
+        )
+        wait_for_key(console, message("tui.key.continue_offline"))
 
     try:
         while True:
             action = run_dashboard(console, bot)
             if action == "config":
                 if run_wizard(console, PROJECT_ROOT):
-                    bot.metrics["restart_required"] = "Bot"
+                    bot.metrics["restart_required"] = message("tui.scope.bot")
             elif action == "settings":
                 if restart := run_settings(console):
                     bot.metrics["restart_required"] = restart
             elif action == "maintenance":
                 bot_restart, launcher_restart = run_maintenance(console)
                 if launcher_restart:
-                    bot.metrics["restart_required"] = "Launcher"
+                    bot.metrics["restart_required"] = message("tui.scope.launcher")
                 elif bot_restart:
-                    bot.metrics["restart_required"] = "Bot"
+                    bot.metrics["restart_required"] = message("tui.scope.bot")
                 wait_for_key(console)
             elif action == "update":
                 from .updater import choose_update, inspect_update
@@ -157,17 +173,17 @@ def main() -> None:
                         continue
                     _perform_update(console, status, update_action)
             elif action == "restart":
-                if not Confirm.ask("Restart the bot now?", default=False):
+                if not Confirm.ask(message("tui.main.restart"), default=False):
                     continue
                 if not _stop_with_choice(console, bot):
                     continue
                 bot.metrics.pop("restart_required", None)
                 startup = _start_bot(console, bot)
                 if startup != "online":
-                    console.print("[error]The bot did not come online. It will remain stopped.[/]")
+                    console.print(message("tui.main.restart_failed"))
                     wait_for_key(console)
             elif action == "quit":
-                if not Confirm.ask("Quit Playify?", default=False):
+                if not Confirm.ask(message("tui.main.quit"), default=False):
                     continue
                 if _stop_with_choice(console, bot):
                     return

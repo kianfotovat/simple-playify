@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from src.playify.config import Installation
+from src.playify.messages import message
 
 CANONICAL_ORIGIN = "https://github.com/kianfotovat/simple-playify.git"
 CHECK_TIMEOUT = 10
@@ -69,11 +70,21 @@ def _git(
             timeout=timeout,
         )
     except FileNotFoundError as exc:
-        raise UpdateError("Git is not installed or is not on PATH.") from exc
+        raise UpdateError(message("tui.update.git_missing")) from exc
     except subprocess.TimeoutExpired as exc:
-        raise UpdateError(f"Git {' '.join(arguments[:2])} exceeded {timeout} seconds.") from exc
+        raise UpdateError(
+            message(
+                "tui.update.git_timeout",
+                command=" ".join(arguments[:2]),
+                seconds=timeout,
+            )
+        ) from exc
     if check and result.returncode != 0:
-        detail = (result.stderr or result.stdout or "Git command failed").strip()
+        detail = (
+            result.stderr
+            or result.stdout
+            or message("tui.update.git_failed")
+        ).strip()
         raise UpdateError(detail[-500:])
     return result
 
@@ -81,7 +92,9 @@ def _git(
 def _revision(root: Path, reference: str) -> str:
     revision = _git(root, "rev-parse", "--verify", reference).stdout.strip().lower()
     if not SHA.fullmatch(revision):
-        raise UpdateError(f"Git returned an invalid revision for {reference}.")
+        raise UpdateError(
+            message("tui.update.invalid_revision", reference=reference)
+        )
     return revision
 
 
@@ -171,15 +184,13 @@ def inspect_update(project_root: Path, *, manual: bool = False) -> UpdateStatus:
         return UpdateStatus(
             root,
             "non_git",
-            error="Automatic updates require a Git clone of the canonical fork.",
+            error=message("tui.update.git_clone_required"),
             manual=manual,
         )
     try:
         origin = _git(root, "remote", "get-url", "origin").stdout.strip()
         if origin != CANONICAL_ORIGIN:
-            raise UpdateError(
-                "The origin remote is not the canonical fork. Playify will never rewrite it automatically."
-            )
+            raise UpdateError(message("tui.update.origin_mismatch"))
         head = _revision(root, "HEAD")
         branch = _branch(root)
         main_result = _git(
@@ -196,7 +207,7 @@ def inspect_update(project_root: Path, *, manual: bool = False) -> UpdateStatus:
                 "missing_main",
                 head_sha=head,
                 branch=branch,
-                error="The local main branch is missing; resolve that manually before updating.",
+                error=message("tui.update.main_missing"),
                 manual=manual,
             )
         _git(
@@ -247,14 +258,11 @@ def _show_conflicts(console: Console, conflicts: tuple[str, ...]) -> None:
     console.print(
         Panel(
             "\n".join(escape(path) for path in conflicts),
-            title="Update blocked by local untracked/ignored paths",
+            title=message("tui.update.conflicts_title"),
             border_style="red",
         )
     )
-    console.print(
-        "[error]These paths would collide with tracked update files. "
-        "Nothing was changed; move them yourself before retrying.[/]"
-    )
+    console.print(message("tui.update.conflicts_notice"))
 
 
 def _confirm_target(console: Console, status: UpdateStatus, target: str) -> bool:
@@ -267,9 +275,9 @@ def _confirm_target(console: Console, status: UpdateStatus, target: str) -> bool
         _show_conflicts(console, conflicts)
         return False
     if status.branch != "main":
-        label = escape(status.branch or "detached HEAD")
+        label = escape(status.branch or message("tui.update.detached"))
         if not Confirm.ask(
-            f"Playify is currently on {label}. Switch to local main for this operation?",
+            message("tui.update.switch_main", branch=label),
             default=False,
         ):
             return False
@@ -280,12 +288,12 @@ def _confirm_target(console: Console, status: UpdateStatus, target: str) -> bool
         console.print(
             Panel(
                 "\n".join(escape(line) for line in dirty),
-                title="Tracked changes that will be discarded",
+                title=message("tui.update.dirty_title"),
                 border_style="yellow",
             )
         )
         if not Confirm.ask(
-            "Discard all listed tracked changes and continue? Untracked and ignored files stay untouched.",
+            message("tui.update.discard"),
             default=False,
         ):
             return False
@@ -300,23 +308,24 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
 
     if status.error:
         if status.manual:
-            console.print(f"[warning]Update check skipped: {escape(status.error)}[/]")
+            console.print(
+                message("tui.update.check_skipped", error=escape(status.error))
+            )
         return "skip"
     if status.suppressed_reason:
         return "skip"
     if status.relation in {"ahead", "diverged", "missing_main"}:
         if status.manual:
-            console.print(
-                "[warning]Local main is ahead of or diverged from origin/main. "
-                "The updater will not decide how to resolve local commits.[/]"
-            )
+            console.print(message("tui.update.diverged"))
         return "skip"
     if status.relation == "up_to_date":
         if status.manual:
-            console.print(f"[success]Playify main is current at {status.main_sha[:7]}.[/]")
+            console.print(
+                message("tui.update.current", revision=status.main_sha[:7])
+            )
         if status.manual and status.rollback_sha and status.rollback_sha != status.main_sha:
             choice = Prompt.ask(
-                "Choose an action",
+                message("tui.update.choose_action"),
                 choices=["rollback", "back"],
                 default="back",
             )
@@ -328,10 +337,14 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
 
     console.print(
         Panel(
-            f"[bold]A Playify update is available[/]\n\n"
-            f"Local main: [cyan]{status.main_sha[:7]}[/]\n"
-            f"Available: [green]{status.target_sha[:7]}[/]\n"
-            f"Change: {escape(status.commit_message or 'No commit summary')}",
+            message(
+                "tui.update.available",
+                local=status.main_sha[:7],
+                available=status.target_sha[:7],
+                summary=escape(
+                    status.commit_message or message("tui.update.no_summary")
+                ),
+            ),
             border_style="blue",
         )
     )
@@ -341,7 +354,9 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
         and status.rollback_sha not in {status.main_sha, status.target_sha}
     ):
         choices.insert(1, "rollback")
-    choice = Prompt.ask("Update action", choices=choices, default="install")
+    choice = Prompt.ask(
+        message("tui.update.action"), choices=choices, default="install"
+    )
     if choice == "3d":
         Installation.set(
             "update_remind_after", (datetime.now(UTC) + timedelta(days=3)).isoformat()
@@ -376,7 +391,7 @@ def _stage_revision(root: Path, revision: str) -> None:
             checkout / "src" / "tui",
         )
         if not all(path.exists() for path in required):
-            raise UpdateError("The staged revision is missing required Playify files.")
+            raise UpdateError(message("tui.update.stage_missing"))
         result = subprocess.run(
             [
                 sys.executable,
@@ -396,10 +411,16 @@ def _stage_revision(root: Path, revision: str) -> None:
             timeout=120,
         )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "compileall failed").strip()
-            raise UpdateError(f"The staged revision failed compilation: {detail[-500:]}")
+            detail = (
+                result.stderr
+                or result.stdout
+                or message("tui.update.compile_failed")
+            ).strip()
+            raise UpdateError(
+                message("tui.update.stage_compile_failed", detail=detail[-500:])
+            )
     except subprocess.TimeoutExpired as exc:
-        raise UpdateError("Staged revision validation exceeded 120 seconds.") from exc
+        raise UpdateError(message("tui.update.stage_timeout")) from exc
     finally:
         if added:
             try:
@@ -419,30 +440,29 @@ def _stage_revision(root: Path, revision: str) -> None:
 
 def _revalidate(status: UpdateStatus, target: str, *, origin_target: bool) -> None:
     if status.selected_target != target or not status.discard_confirmed:
-        raise UpdateError("The requested operation was not confirmed.")
+        raise UpdateError(message("tui.update.not_confirmed"))
     if _branch(status.root) != status.branch:
-        raise UpdateError("The checked-out branch changed after confirmation; retry the update.")
+        raise UpdateError(message("tui.update.branch_changed"))
     if _revision(status.root, "HEAD") != status.head_sha:
-        raise UpdateError("HEAD changed after confirmation; retry the update.")
+        raise UpdateError(message("tui.update.head_changed"))
     if _dirty_tracked(status.root) != status.confirmed_dirty:
-        raise UpdateError("Tracked files changed after confirmation; retry the update.")
+        raise UpdateError(message("tui.update.files_changed"))
     if origin_target and _revision(status.root, "refs/remotes/origin/main") != target:
-        raise UpdateError("origin/main changed after confirmation; run the check again.")
+        raise UpdateError(message("tui.update.origin_changed"))
     revisions = {target}
     if status.head_sha and status.confirmed_dirty:
         revisions.add(status.head_sha)
     conflicts = _path_conflicts(status.root, revisions)
     if conflicts:
         raise UpdateError(
-            "An untracked or ignored path began conflicting after confirmation: "
-            + ", ".join(conflicts)
+            message("tui.update.new_conflict", paths=", ".join(conflicts))
         )
 
 
 def _prepare_main(status: UpdateStatus) -> None:
     if status.branch != "main":
         if not status.switch_confirmed:
-            raise UpdateError("Switching to main was not confirmed.")
+            raise UpdateError(message("tui.update.switch_unconfirmed"))
         if status.confirmed_dirty:
             _git(status.root, "reset", "--hard", "HEAD", timeout=60)
         _git(status.root, "switch", "main", timeout=60)
@@ -454,7 +474,7 @@ def install_update(project_root: Path, status: UpdateStatus) -> tuple[bool, str]
     del project_root  # The inspected, resolved root is authoritative.
     target = status.target_sha
     if not target:
-        return False, "no fetched target revision"
+        return False, message("tui.update.no_target")
     try:
         _revalidate(status, target, origin_target=True)
         _stage_revision(status.root, target)
@@ -467,12 +487,11 @@ def install_update(project_root: Path, status: UpdateStatus) -> tuple[bool, str]
         _prepare_main(status)
         if conflicts := _path_conflicts(status.root, {target}):
             raise UpdateError(
-                "Update stopped to preserve a local untracked/ignored path: "
-                + ", ".join(conflicts)
+                message("tui.update.preserve_path", paths=", ".join(conflicts))
             )
         _git(status.root, "reset", "--hard", "origin/main", timeout=60)
         if _revision(status.root, "HEAD") != target:
-            raise UpdateError("Git did not finish on the validated target revision.")
+            raise UpdateError(message("tui.update.target_failed"))
         Installation.update(
             {
                 "last_update_sha": target,
@@ -491,7 +510,7 @@ def rollback_update(project_root: Path, status: UpdateStatus) -> tuple[bool, str
     del project_root
     target = status.rollback_sha
     if not target:
-        return False, "no previous update revision is available"
+        return False, message("tui.update.no_rollback")
     try:
         _revalidate(status, target, origin_target=False)
         _stage_revision(status.root, target)
@@ -499,12 +518,14 @@ def rollback_update(project_root: Path, status: UpdateStatus) -> tuple[bool, str
         _prepare_main(status)
         if conflicts := _path_conflicts(status.root, {target}):
             raise UpdateError(
-                "Rollback stopped to preserve a local untracked/ignored path: "
-                + ", ".join(conflicts)
+                message(
+                    "tui.update.rollback_preserve_path",
+                    paths=", ".join(conflicts),
+                )
             )
         _git(status.root, "reset", "--hard", target, timeout=60)
         if _revision(status.root, "HEAD") != target:
-            raise UpdateError("Git did not finish on the validated rollback revision.")
+            raise UpdateError(message("tui.update.rollback_failed"))
         Installation.update(
             {
                 "previous_update_sha": current_main,

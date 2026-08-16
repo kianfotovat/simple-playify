@@ -7,6 +7,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from src.playify.config import Config
+from src.playify.messages import message
 
 CHOICES = {
     "persistence_mode": ["full", "settings"],
@@ -18,28 +19,37 @@ CHOICES = {
     "bot_status_type": ["none", "playing", "listening", "watching", "competing"],
 }
 
+
+def _row(category: str, key: str) -> tuple[str, str, str]:
+    return (
+        message(f"tui.settings.category.{category}"),
+        key,
+        message(f"tui.settings.{key}"),
+    )
+
+
 ROWS = (
-    ("Playback", "persistence_mode", "Full player persistence or server settings only"),
-    ("Playback", "tidal_country", "Two-letter Tidal country code"),
-    ("Playback", "soundcloud_fallback", "Use SoundCloud recommendation fallback"),
-    ("Network", "private_media_allowlist", "Private host/IP/CIDR allowlist"),
-    ("Network", "ip_mode", "Auto networking or force IPv4"),
-    ("Network", "youtube_clients", "yt-dlp YouTube client names"),
-    ("Performance", "worker_count", "Auto or 1-8 metadata workers"),
-    ("Performance", "http_concurrency", "Auto or 1-16 HTTP requests"),
-    ("Interface", "tui_refresh", "Auto or refresh rate in Hz"),
-    ("Interface", "color_mode", "Auto, V2, ANSI, or no colors"),
-    ("Interface", "symbol_mode", "Auto, Unicode, or ASCII symbols"),
-    ("Interface", "controller_idle_image", "Idle controller image URL or none"),
-    ("Presence", "bot_status_type", "Optional Discord presence type"),
-    ("Presence", "bot_status_text", "Optional Discord presence text"),
-    ("Updates", "updates_enabled", "Check the canonical fork before launch"),
+    _row("playback", "persistence_mode"),
+    _row("playback", "tidal_country"),
+    _row("playback", "soundcloud_fallback"),
+    _row("network", "private_media_allowlist"),
+    _row("network", "ip_mode"),
+    _row("network", "youtube_clients"),
+    _row("performance", "worker_count"),
+    _row("performance", "http_concurrency"),
+    _row("interface", "tui_refresh"),
+    _row("interface", "color_mode"),
+    _row("interface", "symbol_mode"),
+    _row("interface", "controller_idle_image"),
+    _row("presence", "bot_status_type"),
+    _row("presence", "bot_status_text"),
+    _row("updates", "updates_enabled"),
 )
 
 
 def _display(value) -> str:
     if isinstance(value, list):
-        return ", ".join(value) or "(empty)"
+        return ", ".join(value) or message("tui.settings.empty")
     return str(value)
 
 
@@ -51,7 +61,7 @@ def _convert(key: str, raw: str):
     if key == "tidal_country":
         value = raw.strip().upper()
         if len(value) != 2 or not value.isalpha():
-            raise ValueError("use a two-letter country code")
+            raise ValueError(message("tui.settings.country_error"))
         return value
     if key == "worker_count":
         return "auto" if raw == "auto" else max(1, min(8, int(raw)))
@@ -68,19 +78,21 @@ def run_settings(console: Console) -> str | None:
     Config.reload()
     restart_required: str | None = None
     while True:
-        table = Table(title="Playify settings", show_lines=False)
+        table = Table(title=message("tui.settings.title"), show_lines=False)
         table.add_column("#", justify="right")
-        table.add_column("Category")
-        table.add_column("Setting")
-        table.add_column("Current")
-        table.add_column("Purpose")
+        table.add_column(message("tui.settings.column.category"))
+        table.add_column(message("tui.settings.column.setting"))
+        table.add_column(message("tui.settings.column.current"))
+        table.add_column(message("tui.settings.column.purpose"))
         for index, (category, key, description) in enumerate(ROWS, 1):
             table.add_row(str(index), category, key, _display(Config.get(key)), description)
         console.clear()
         console.print(table)
         if restart_required:
-            console.print(f"[warning]{restart_required} restart required to apply changes.[/]")
-        selection = Prompt.ask("Setting number, or Esc to return", default="esc").lower()
+            console.print(
+                message("tui.settings.restart_required", scope=restart_required)
+            )
+        selection = Prompt.ask(message("tui.settings.select"), default="esc").lower()
         if selection in {"esc", "q", "back"}:
             return restart_required
         try:
@@ -91,17 +103,17 @@ def run_settings(console: Console) -> str | None:
         current = Config.get(key)
         choices = CHOICES.get(key)
         raw = Prompt.ask(
-            f"New {key}",
+            message("tui.settings.new", setting=key),
             choices=choices,
             default=_display(current) if not isinstance(current, list) else ",".join(current),
         )
         try:
             Config.set(key, _convert(key, raw))
         except (TypeError, ValueError) as exc:
-            console.print(f"[error]{exc}[/]")
-            console.input("Press Enter…")
+            console.print(message("tui.settings.error", error=exc))
+            console.input(message("tui.settings.press_enter"))
             continue
         if key in {"color_mode", "symbol_mode"}:
-            restart_required = "Launcher"
+            restart_required = message("tui.scope.launcher")
         elif restart_required is None:
-            restart_required = "Bot"
+            restart_required = message("tui.scope.bot")

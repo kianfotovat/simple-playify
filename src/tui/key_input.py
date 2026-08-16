@@ -9,6 +9,8 @@ import time
 
 from rich.console import Console
 
+from src.playify.messages import message
+
 
 @contextlib.contextmanager
 def terminal_mode():
@@ -67,7 +69,9 @@ def read_key() -> str | None:
     }.get(sequence, "esc")
 
 
-def wait_for_key(console: Console, prompt: str = "Press any key or Esc to return…") -> str:
+def wait_for_key(
+    console: Console, prompt: str = message("tui.key.return")
+) -> str:
     """Wait for one key in a TTY, with a line-input fallback for redirected stdin."""
 
     if not sys.stdin.isatty():
