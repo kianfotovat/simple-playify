@@ -226,7 +226,7 @@ class SearchView(discord.ui.View):
             placeholder="Choose a result",
             options=[
                 discord.SelectOption(
-                    label=track.title[:100],
+                    label=f"{index + 1}. {track.title}"[:100],
                     description=(
                         f"{track.uploader} • "
                         f"{duration_text(track.duration, live=track.is_live)}"
