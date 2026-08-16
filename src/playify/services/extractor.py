@@ -44,6 +44,7 @@ DEFINITIVE_MARKERS = (
     "does not exist",
     "copyright",
 )
+DIRECT_EXTENSION_ERROR = "direct media URLs must end with a supported extension"
 
 
 class ResolveError(RuntimeError):
@@ -252,7 +253,7 @@ class Extractor:
 
     async def _direct(self, url: str, requested_by: int | None, provenance: str) -> Track:
         if _direct_extension(url) not in DIRECT_EXTENSIONS:
-            raise ResolveError("direct media URLs must end with a supported extension")
+            raise ResolveError(DIRECT_EXTENSION_ERROR)
         await validate_url(url)
         try:
             final = await self.http.resolve(url)
@@ -260,7 +261,7 @@ class Extractor:
             raise ResolveError("direct media URL could not be validated") from exc
         if _direct_extension(final) not in DIRECT_EXTENSIONS:
             raise ResolveError("the final direct media URL has no supported extension")
-        title = Path(urlsplit(final).path).name or message("track.direct_media")
+        title = Path(urlsplit(final).path).name or message("media.direct")
         return Track(
             title=title,
             webpage_url=final,
@@ -290,7 +291,7 @@ class Extractor:
                 host == domain or host.endswith("." + domain)
                 for domain in ("youtube.com", "soundcloud.com", "twitch.tv", "bandcamp.com")
             ):
-                raise ResolveError("direct media URLs must end with a supported extension")
+                raise ResolveError(DIRECT_EXTENSION_ERROR)
             try:
                 await validate_url(query)
             except UnsafeUrlError as exc:

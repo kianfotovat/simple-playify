@@ -12,7 +12,12 @@ from .constants import display_version
 from .discord_utils import format_time, safe_text
 from .messages import message
 from .models import ServerSettings, Track
-from .services.player import PlayerSession, _human_count
+from .services.player import (
+    LIVE_SEEK_ERROR,
+    SEEK_RANGE_ERROR,
+    PlayerSession,
+    _human_count,
+)
 from .ui.views import ChannelPaginator, SearchView, SeekView
 
 LOGGER = logging.getLogger(__name__)
@@ -470,8 +475,8 @@ class CommandSuite:
         except ValueError as exc:
             key = {
                 "format": "player.seek_format",
-                "live streams cannot be seeked": "player.live_seek",
-                "timestamp is outside the current track": "player.seek_range",
+                LIVE_SEEK_ERROR: "player.live_seek",
+                SEEK_RANGE_ERROR: "player.seek_range",
             }.get(str(exc), "player.nothing_playing")
             await self.app.responses.send(
                 interaction,

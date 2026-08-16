@@ -16,9 +16,8 @@ from dotenv import dotenv_values
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from src.playify.constants import HTTP_USER_AGENT
 from src.playify.messages import message
-
-USER_AGENT = "Playify/2.1 (+https://github.com/kianfotovat/simple-playify)"
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -70,7 +69,7 @@ def _json_request(request: urllib.request.Request, timeout: int = 15) -> dict:
 def verify_discord(token: str) -> tuple[str, str | None]:
     request = urllib.request.Request(
         "https://discord.com/api/v10/users/@me",
-        headers={"Authorization": f"Bot {token}", "User-Agent": USER_AGENT},
+        headers={"Authorization": f"Bot {token}", "User-Agent": HTTP_USER_AGENT},
     )
     try:
         data = _json_request(request)
@@ -90,7 +89,7 @@ def verify_spotify(client_id: str, client_secret: str) -> str:
         headers={
             "Authorization": f"Basic {credentials}",
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": USER_AGENT,
+            "User-Agent": HTTP_USER_AGENT,
         },
     )
     try:

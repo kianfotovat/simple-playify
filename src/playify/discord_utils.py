@@ -61,7 +61,7 @@ def source_text(source: str) -> str:
         if marker in normalized:
             return message(key)
     if normalized in {"direct", "generic"}:
-        return message("source.direct")
+        return message("media.direct")
     if normalized in {"", "unknown"}:
         return message("source.unknown")
     if normalized == "idle":

@@ -11,6 +11,7 @@ FORK_REPOSITORY = "kianfotovat/simple-playify"
 FORK_URL = f"https://github.com/{FORK_REPOSITORY}"
 ISSUES_URL = f"{FORK_URL}/issues"
 UPSTREAM_REPOSITORY = "alan7383/playify"
+HTTP_USER_AGENT = f"{NAME}/{'.'.join(VERSION.split('.')[:2])} (+{FORK_URL})"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"

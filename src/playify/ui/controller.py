@@ -252,7 +252,7 @@ class ControllerView(discord.ui.View):
             style=discord.ButtonStyle.primary,
         )
         self._button(
-            message("controller.button.jump"),
+            message("button.jump"),
             2,
             jump,
             custom_id="jump",

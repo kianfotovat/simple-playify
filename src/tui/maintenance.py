@@ -18,11 +18,10 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from src.playify.config import Installation
-from src.playify.constants import BIN_DIR
+from src.playify.constants import BIN_DIR, HTTP_USER_AGENT
 from src.playify.messages import message
 
 API = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest"
-USER_AGENT = "Playify/2.1 (+https://github.com/kianfotovat/simple-playify)"
 
 
 def ffmpeg_name() -> str:
@@ -63,7 +62,7 @@ def managed_ffmpeg_due() -> bool:
 
 
 def _request(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": HTTP_USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
 

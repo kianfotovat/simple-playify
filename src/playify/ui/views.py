@@ -11,7 +11,7 @@ import discord
 from ..discord_utils import Responses, duration_text, format_time, progress_bar, safe_text
 from ..messages import message
 from ..models import Track
-from ..services.player import PlayerSession
+from ..services.player import LIVE_SEEK_ERROR, SEEK_RANGE_ERROR, PlayerSession
 
 
 async def allowed_interaction(responses: Responses, interaction: discord.Interaction) -> bool:
@@ -319,7 +319,7 @@ def _parse_timestamp(value: str) -> float:
     )
 
 
-class SeekTimestampModal(discord.ui.Modal, title=message("seek.modal.title")):
+class SeekTimestampModal(discord.ui.Modal, title=message("button.jump")):
     timestamp = discord.ui.TextInput(
         label=message("seek.modal.label"),
         placeholder=message("seek.modal.placeholder"),
@@ -338,8 +338,8 @@ class SeekTimestampModal(discord.ui.Modal, title=message("seek.modal.title")):
         except ValueError as exc:
             key = {
                 "format": "player.seek_format",
-                "live streams cannot be seeked": "player.live_seek",
-                "timestamp is outside the current track": "player.seek_range",
+                LIVE_SEEK_ERROR: "player.live_seek",
+                SEEK_RANGE_ERROR: "player.seek_range",
             }.get(str(exc), "player.nothing_playing")
             await self.seek_view.responses.send(
                 interaction,
@@ -379,7 +379,7 @@ class SeekView(discord.ui.View):
             button.callback = move
             self.add_item(button)
         jump = discord.ui.Button(
-            label=message("seek.button.jump"), emoji="✏️", row=1
+            label=message("button.jump"), emoji="✏️", row=1
         )
 
         async def jump_to(interaction: discord.Interaction) -> None:

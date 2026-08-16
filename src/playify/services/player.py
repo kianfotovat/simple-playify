@@ -19,6 +19,9 @@ from ..storage import Storage
 from .extractor import Extractor, ResolveError
 
 LOGGER = logging.getLogger(__name__)
+LIVE_SEEK_ERROR = "live streams cannot be seeked"
+NOTHING_PLAYING_ERROR = "nothing is playing"
+SEEK_RANGE_ERROR = "timestamp is outside the current track"
 
 ChangeCallback = Callable[["PlayerSession", str], Awaitable[None]]
 
@@ -462,14 +465,14 @@ class PlayerSession:
         async with self.lock:
             current = self.state.current
             if current is None:
-                raise ValueError("nothing is playing")
+                raise ValueError(NOTHING_PLAYING_ERROR)
             if current.is_live:
-                raise ValueError("live streams cannot be seeked")
+                raise ValueError(LIVE_SEEK_ERROR)
             position = float(position)
             if not clamp and (
                 position < 0 or (current.duration is not None and position > current.duration)
             ):
-                raise ValueError("timestamp is outside the current track")
+                raise ValueError(SEEK_RANGE_ERROR)
             upper = current.duration if current.duration is not None else max(0.0, position)
             position = max(0.0, min(position, upper))
             self.state.position = position
@@ -596,7 +599,7 @@ class PlayerSession:
     async def toggle_loop(self) -> bool:
         async with self.lock:
             if self.state.current is None:
-                raise ValueError("nothing is playing")
+                raise ValueError(NOTHING_PLAYING_ERROR)
             self.state.loop_current = not self.state.loop_current
             await self.changed("loop")
             return self.state.loop_current

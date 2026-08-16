@@ -21,6 +21,7 @@ from .http_client import BROWSER_USER_AGENT, HttpClient
 LOGGER = logging.getLogger(__name__)
 UNKNOWN_ARTIST = message("track.unknown_artist")
 UNKNOWN_TITLE = message("track.unknown_title")
+INVALID_SPOTIFY_URL = "invalid Spotify URL"
 
 SPOTIFY_HOSTS = {"open.spotify.com"}
 DEEZER_HOSTS = {"deezer.com", "www.deezer.com", "link.deezer.com"}
@@ -172,7 +173,7 @@ class CatalogRouter:
         if path and path[0].startswith("intl-"):
             path = path[1:]
         if len(path) < 2:
-            raise CatalogError("invalid Spotify URL")
+            raise CatalogError(INVALID_SPOTIFY_URL)
         kind, identifier = path[0], path[1]
         result: list[CatalogItem] = []
 
@@ -220,7 +221,7 @@ class CatalogRouter:
         if path and path[0].startswith("intl-"):
             path = path[1:]
         if len(path) < 2:
-            raise CatalogError("invalid Spotify URL")
+            raise CatalogError(INVALID_SPOTIFY_URL)
         kind = path[0]
         if kind == "playlist":
             raw = client.get_playlist(url, max_tracks=None)
