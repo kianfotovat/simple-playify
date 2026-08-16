@@ -15,11 +15,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from rich.console import Console
-from rich.prompt import Prompt
 
 from src.playify.config import Installation
 from src.playify.constants import BIN_DIR, HTTP_USER_AGENT
 from src.playify.messages import message
+
+from .key_input import ask_with_escape
 
 API = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest"
 
@@ -151,11 +152,12 @@ def run_maintenance(console: Console) -> tuple[bool, bool]:
         )
     )
     console.print(message("tui.maintenance.menu"))
-    choice = Prompt.ask(
+    choice = ask_with_escape(
+        console,
         message("tui.maintenance.choice"),
         choices=["1", "2", "3", "esc"],
         default="esc",
-    ).lower()
+    )
     bot_restart = False
     launcher_restart = False
     if choice in {"1", "3"}:

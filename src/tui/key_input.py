@@ -8,6 +8,8 @@ import sys
 import time
 
 from rich.console import Console
+from rich.prompt import Prompt
+from rich.text import Text
 
 from src.playify.messages import message
 
@@ -83,3 +85,65 @@ def wait_for_key(console: Console, prompt: str = message("tui.key.return")) -> s
         return key
     finally:
         console.print()
+
+
+def ask_with_escape(
+    console: Console,
+    prompt: str,
+    *,
+    choices: list[str] | tuple[str, ...] | None = None,
+    default: str | None = None,
+) -> str:
+    """Read a line while allowing a physical Escape key to return immediately."""
+
+    if not sys.stdin.isatty():
+        return Prompt.ask(prompt, choices=choices, default=default).lower()
+
+    allowed = {choice.lower() for choice in choices} if choices else None
+    while True:
+        label = Text.from_markup(prompt)
+        if choices:
+            label.append(" [", style="muted")
+            for index, choice in enumerate(choices):
+                if index:
+                    label.append("/", style="muted")
+                label.append(choice, style="key")
+            label.append("]", style="muted")
+        if default is not None:
+            label.append(f" ({default})", style="muted")
+        label.append(": ")
+        console.print(label, end="")
+
+        entered: list[str] = []
+        with terminal_mode():
+            while True:
+                key = read_key()
+                if key is None:
+                    time.sleep(0.01)
+                    continue
+                if key == "esc":
+                    console.print()
+                    return "esc"
+                if key in {"\r", "\n"}:
+                    console.print()
+                    value = "".join(entered).strip().lower()
+                    if not value and default is not None:
+                        value = default.lower()
+                    break
+                if key == "\x03":
+                    console.print()
+                    raise KeyboardInterrupt
+                if key in {"\x08", "\x7f"}:
+                    if entered:
+                        entered.pop()
+                        console.file.write("\b \b")
+                        console.file.flush()
+                    continue
+                if len(key) == 1 and key.isprintable():
+                    entered.append(key)
+                    console.file.write(key)
+                    console.file.flush()
+
+        if allowed is None or value in allowed:
+            return value
+        console.print(message("tui.key.invalid_choice", choices=", ".join(choices or ())))

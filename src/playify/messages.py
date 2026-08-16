@@ -226,6 +226,7 @@ MESSAGES: dict[str, str] = {
     "tui.key.return": "Press any key or Esc to return…",
     "tui.key.restart_launcher": "Press any key or Esc to restart the launcher…",
     "tui.key.continue_offline": "Press any key or Esc to continue to the offline dashboard…",
+    "tui.key.invalid_choice": "[warning]Choose one of: {choices}[/]",
     "tui.main.stop_timeout": "The bot did not stop in 15 seconds",
     "tui.main.start_pending": "Discord startup is still pending after 30 seconds. Keep waiting?",
     "tui.main.update.rolled_back": "Rolled back to {revision}",

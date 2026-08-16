@@ -9,6 +9,8 @@ from rich.table import Table
 from src.playify.config import Config
 from src.playify.messages import message
 
+from .key_input import ask_with_escape
+
 CHOICES = {
     "persistence_mode": ["full", "settings"],
     "updates_enabled": ["true", "false"],
@@ -90,7 +92,7 @@ def run_settings(console: Console) -> str | None:
         console.print(table)
         if restart_required:
             console.print(message("tui.settings.restart_required", scope=restart_required))
-        selection = Prompt.ask(message("tui.settings.select"), default="esc").lower()
+        selection = ask_with_escape(console, message("tui.settings.select"), default="esc")
         if selection in {"esc", "q", "back"}:
             return restart_required
         try:
