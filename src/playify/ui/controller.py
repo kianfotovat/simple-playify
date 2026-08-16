@@ -423,6 +423,8 @@ class ControllerManager:
                 while session.guild_id in self.dirty:
                     self.dirty.discard(session.guild_id)
                     await asyncio.sleep(0.15)
+                    if session.guild_id in self.dirty:
+                        continue
                     refresh_view = session.guild_id in self.view_dirty
                     self.view_dirty.discard(session.guild_id)
                     channel = self.bot.get_channel(session.state.controller_channel_id or 0)
