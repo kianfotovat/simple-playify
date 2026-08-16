@@ -300,7 +300,7 @@ class QueueView(discord.ui.View):
         visible = tracks[start : start + 10]
         if visible:
             lines = [
-                f"`{start + index + 1:>3}` {safe_text(track.title, 90)} — {safe_text(track.uploader, 50)}"
+                f"`{start + index + 1}` {safe_text(track.title, 90)} — {safe_text(track.uploader, 50)}"
                 for index, track in enumerate(visible)
             ]
         else:

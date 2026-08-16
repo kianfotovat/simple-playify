@@ -373,7 +373,7 @@ class CommandSuite:
             embed = discord.Embed(
                 title="Search results",
                 description="\n\n".join(
-                    f"`{index + 1:>2}` **{safe_text(track.title, 100)}**\n"
+                    f"`{index + 1}` **{safe_text(track.title, 100)}**\n"
                     f"{safe_text(track.uploader, 60)} • "
                     f"{duration_text(track.duration, live=track.is_live)}"
                     for index, track in enumerate(tracks)
