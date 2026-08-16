@@ -39,9 +39,9 @@ def format_time(seconds: float) -> str:
     return f"{hours}:{minutes:02}:{seconds:02}" if hours else f"{minutes}:{seconds:02}"
 
 
-def progress_bar(fraction: float) -> str:
-    filled = max(0, min(10, round(fraction * 10)))
-    return "█" * filled + "░" * (10 - filled)
+def progress_bar(fraction: float, segments: int = 10) -> str:
+    filled = max(0, min(segments, round(fraction * segments)))
+    return "█" * filled + "░" * (segments - filled)
 
 
 class Responses:

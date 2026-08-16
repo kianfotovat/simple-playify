@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Sequence
 
 import discord
 
-from ..discord_utils import Responses, format_time, safe_text
+from ..discord_utils import Responses, format_time, progress_bar, safe_text
 from ..messages import message
 from ..models import Track
 from ..services.player import PlayerSession
@@ -174,6 +174,54 @@ class SearchView(discord.ui.View):
         return await allowed_interaction(self.responses, interaction)
 
 
+def _parse_timestamp(value: str) -> float:
+    parts = value.strip().split(":")
+    if not 1 <= len(parts) <= 3:
+        raise ValueError("format")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError as exc:
+        raise ValueError("format") from exc
+    if any(number < 0 for number in numbers) or any(
+        number >= 60 for number in numbers[1:]
+    ):
+        raise ValueError("format")
+    return float(
+        sum(number * (60**index) for index, number in enumerate(reversed(numbers)))
+    )
+
+
+class SeekTimestampModal(discord.ui.Modal, title="Jump To"):
+    timestamp = discord.ui.TextInput(
+        label="Timestamp",
+        placeholder="For example: 1:23 or 45",
+        max_length=8,
+    )
+
+    def __init__(self, view: "SeekView") -> None:
+        super().__init__()
+        self.seek_view = view
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            await self.seek_view.session.seek(
+                _parse_timestamp(str(self.timestamp)), clamp=False
+            )
+        except ValueError as exc:
+            key = {
+                "format": "player.seek_format",
+                "live streams cannot be seeked": "player.live_seek",
+                "timestamp is outside the current track": "player.seek_range",
+            }.get(str(exc), "player.nothing_playing")
+            await self.seek_view.responses.send(
+                interaction, message(key), lifetime="error"
+            )
+            return
+        await interaction.response.edit_message(
+            embed=self.seek_view.embed(), view=self.seek_view
+        )
+
+
 class SeekView(discord.ui.View):
     def __init__(self, session: PlayerSession, responses: Responses) -> None:
         super().__init__(timeout=120)
@@ -181,8 +229,18 @@ class SeekView(discord.ui.View):
         self.responses = responses
         self.message: discord.Message | None = None
         self.ticker: asyncio.Task[None] | None = None
-        for delta, label in ((-60, "−60s"), (-15, "−15s"), (15, "+15s"), (60, "+60s")):
-            button = discord.ui.Button(label=label)
+        for delta, label, emoji in (
+            (-30, "30s", "⏪"),
+            (-10, "10s", "◀️"),
+            (10, "10s", "▶️"),
+            (30, "30s", "⏩"),
+        ):
+            button = discord.ui.Button(
+                label=label,
+                emoji=emoji,
+                style=discord.ButtonStyle.primary,
+                row=0,
+            )
 
             async def move(interaction: discord.Interaction, amount: int = delta) -> None:
                 await self.session.seek(self.session.position + amount)
@@ -190,7 +248,17 @@ class SeekView(discord.ui.View):
 
             button.callback = move
             self.add_item(button)
-        close = discord.ui.Button(label="Close", style=discord.ButtonStyle.danger)
+        jump = discord.ui.Button(label="Jump To", emoji="✏️", row=1)
+
+        async def jump_to(interaction: discord.Interaction) -> None:
+            await interaction.response.send_modal(SeekTimestampModal(self))
+
+        jump.callback = jump_to
+        self.add_item(jump)
+
+        close = discord.ui.Button(
+            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+        )
 
         async def close_view(interaction: discord.Interaction) -> None:
             await interaction.response.defer()
@@ -219,16 +287,27 @@ class SeekView(discord.ui.View):
         label = format_time(position)
         if duration is not None:
             label += f" / {format_time(duration)}"
-        return discord.Embed(title="Seek", description=f"**{label}**", color=0x5865F2)
+        if duration:
+            bar = progress_bar(position / duration, segments=30)
+        else:
+            bar = progress_bar(0, segments=30)
+        title = safe_text(track.title, 150) if track else "Nothing playing"
+        return discord.Embed(
+            title="Seek",
+            description=f"**{title}**\n\n`[{bar}]`\n**{label}**",
+            color=0x5865F2,
+        )
 
     def start_ticker(self) -> None:
         async def tick() -> None:
             try:
                 while True:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
                     if self.is_finished():
                         break
-                    if self.message:
+                    if self.message and not (
+                        self.session.state.paused or self.session.state.dormant
+                    ):
                         await self.message.edit(embed=self.embed(), view=self)
             except (asyncio.CancelledError, discord.NotFound, discord.Forbidden):
                 pass
