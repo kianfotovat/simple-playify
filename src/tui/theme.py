@@ -3,26 +3,20 @@
 from rich.style import Style
 from rich.theme import Theme
 
-# ─── Brand Colors ────────────────────────────────────────────────────────────
-# Playify palette: deep blues, navy, ice accents
-BLUE_DEEP = "#0A1628"
-BLUE_DARK = "#0D2137"
-BLUE_NAVY = "#1B3A5C"
-BLUE = "#2471A3"
-BLUE_MID = "#2E86C1"
-BLUE_LIGHT = "#5DADE2"
-BLUE_ICE = "#85C1E9"
-BLUE_PALE = "#AED6F1"
-BLUE_ELECTRIC = "#3498DB"
-STEEL = "#ABB2B9"
-WHITE = "#ECF0F1"
-GRAY = "#7F8C8D"
-GRAY_DARK = "#566573"
-RED = "#E74C3C"
-GREEN = "#27AE60"
-YELLOW = "#F1C40F"
+# ─── Brand Palette ──────────────────────────────────────────────────────────
+BRAND_PURPLE = "#7571D5"
+BRAND_PALE = "#DCDCF5"
+BRAND_GRADIENT = (
+    BRAND_PURPLE,
+    "#8683DB",
+    "#9894E0",
+    "#AAA6E6",
+    "#BBB8EB",
+    "#CDCAF0",
+    BRAND_PALE,
+)
 
-# Dashboard palette: vivid accents over neutral chrome. These remain visually
+# Interface accents over neutral chrome. These remain visually
 # distinct when Rich downsamples them to the standard 16-color ANSI palette.
 DASH_PURPLE = "#C678DD"
 DASH_CYAN = "#5CCFE6"
@@ -34,47 +28,36 @@ DASH_RED = "#FF5C57"
 DASH_TEXT = "#D8DEE9"
 DASH_MUTED = "#68707D"
 DASH_BORDER = "#3B4261"
-BRAND_PURPLE = "#7571D5"
-BRAND_PALE = "#DCDCF5"
-BRAND_GRADIENT = (
-    "#7571D5",
-    "#8683DB",
-    "#9894E0",
-    "#AAA6E6",
-    "#BBB8EB",
-    "#CDCAF0",
-    BRAND_PALE,
-)
 
 # ─── Rich Theme ──────────────────────────────────────────────────────────────
 PLAYIFY_THEME = Theme(
     {
-        "title": Style(color=BLUE_LIGHT, bold=True),
-        "subtitle": Style(color=BLUE_ICE),
-        "success": Style(color=GREEN, bold=True),
-        "error": Style(color=RED, bold=True),
-        "warning": Style(color=YELLOW, bold=True),
-        "info": Style(color=BLUE_LIGHT),
-        "muted": Style(color=GRAY),
-        "accent": Style(color=BLUE_ELECTRIC, bold=True),
-        "key": Style(color=BLUE_ICE, bold=True),
-        "value": Style(color=WHITE),
-        "header": Style(color=BLUE_LIGHT, bold=True),
-        "border": Style(color=BLUE_NAVY),
-        "log.info": Style(color=BLUE_LIGHT),
-        "log.warning": Style(color=YELLOW),
-        "log.error": Style(color=RED, bold=True),
-        "log.debug": Style(color=GRAY),
-        "prompt": Style(color=BLUE_ICE, bold=True),
-        "input": Style(color=WHITE, bold=True),
-        "status.online": Style(color=GREEN, bold=True),
-        "status.starting": Style(color=YELLOW, bold=True),
-        "status.offline": Style(color=RED),
-        "music.title": Style(color=WHITE, bold=True),
-        "music.artist": Style(color=BLUE_ICE),
-        "music.time": Style(color=BLUE_LIGHT),
-        "hotkey": Style(color=BLUE_ICE, bold=True),
-        "hotkey.desc": Style(color=GRAY),
+        "title": Style(color=BRAND_PURPLE, bold=True),
+        "subtitle": Style(color=BRAND_PALE),
+        "success": Style(color=DASH_GREEN, bold=True),
+        "error": Style(color=DASH_RED, bold=True),
+        "warning": Style(color=DASH_YELLOW, bold=True),
+        "info": Style(color=DASH_CYAN),
+        "muted": Style(color=DASH_MUTED),
+        "accent": Style(color=BRAND_PURPLE, bold=True),
+        "key": Style(color=BRAND_PALE, bold=True),
+        "value": Style(color=DASH_TEXT),
+        "header": Style(color=BRAND_PURPLE, bold=True),
+        "border": Style(color=DASH_BORDER),
+        "log.info": Style(color=DASH_CYAN),
+        "log.warning": Style(color=DASH_YELLOW),
+        "log.error": Style(color=DASH_RED, bold=True),
+        "log.debug": Style(color=DASH_MUTED),
+        "prompt": Style(color=BRAND_PALE, bold=True),
+        "input": Style(color=DASH_TEXT, bold=True),
+        "status.online": Style(color=DASH_GREEN, bold=True),
+        "status.starting": Style(color=DASH_YELLOW, bold=True),
+        "status.offline": Style(color=DASH_RED),
+        "music.title": Style(color=DASH_TEXT, bold=True),
+        "music.artist": Style(color=BRAND_PALE),
+        "music.time": Style(color=DASH_CYAN),
+        "hotkey": Style(color=BRAND_PURPLE, bold=True),
+        "hotkey.desc": Style(color=DASH_MUTED),
         "dash.purple": Style(color=DASH_PURPLE, bold=True),
         "dash.cyan": Style(color=DASH_CYAN, bold=True),
         "dash.pink": Style(color=DASH_PINK, bold=True),
