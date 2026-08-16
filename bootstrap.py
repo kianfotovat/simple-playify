@@ -524,26 +524,49 @@ def stage_environment(runtime: Path, base_python: Path, metadata: dict[str, Any]
         fail(message("bootstrap.cleanup_refused"))
 
     print(message("bootstrap.output", detail=message("bootstrap.building")))
+    uv = shutil.which("uv")
     try:
-        subprocess.run(
-            [str(base_python), "-m", "venv", str(candidate)],
-            check=True,
-            cwd=ROOT,
-        )
+        if uv is not None:
+            subprocess.run(
+                [uv, "venv", "--python", str(base_python), str(candidate)],
+                check=True,
+                cwd=ROOT,
+            )
+        else:
+            subprocess.run(
+                [str(base_python), "-m", "venv", str(candidate)],
+                check=True,
+                cwd=ROOT,
+            )
         _write_ownership_marker(candidate, metadata)
-        subprocess.run(
-            [
-                str(venv_python(candidate)),
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
-                "-r",
-                str(REQUIREMENTS),
-            ],
-            check=True,
-            cwd=ROOT,
-        )
+        if uv is not None:
+            subprocess.run(
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    "--python",
+                    str(venv_python(candidate)),
+                    "-r",
+                    str(REQUIREMENTS),
+                ],
+                check=True,
+                cwd=ROOT,
+            )
+        else:
+            subprocess.run(
+                [
+                    str(venv_python(candidate)),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    "-r",
+                    str(REQUIREMENTS),
+                ],
+                check=True,
+                cwd=ROOT,
+            )
         if not environment_valid(candidate):
             raise RuntimeError(message("bootstrap.stage_failed"))
     except BaseException:
