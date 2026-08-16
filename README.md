@@ -23,6 +23,41 @@ You run Playify on your own Windows or Linux computer. There is no public Playif
 - Remember the queue and playback state between restarts.
 - Manage setup, settings, logs, updates, and FFmpeg from a terminal dashboard.
 
+## Differences from upstream Playify
+
+This repository is a fork of [alan7383/playify](https://github.com/alan7383/playify). It retains the same basic purpose and most of the same music sources, but deliberately takes a smaller product direction and substantially reworks playback, Discord UI, persistence, and runtime management.
+
+| Area | Upstream Playify | This fork |
+|---|---|---|
+| Controller | An optional persistent controller assigned to a text channel with `/setup controller` | One controller is managed automatically in the active Voice or Stage channel's text chat; `/nowplaying` recreates it at the bottom |
+| Playback lifecycle | Optional 24/7 modes can keep the bot connected indefinitely | When everyone leaves, the connection becomes dormant while the track, position, and queue are retained for later |
+| Discord UI | Traditional embeds, interactive views, and `/play` autocomplete | Redesigned controller and command views with artwork, one-second playback/seek updates, automatic queue refreshes, and short-lived responses |
+| Server policy | A replace-or-reset channel allowlist | Set/add/remove/clear/show allowlist commands plus `allow` and `protect` policies for moving playback between channels |
+| Persistence | Playback and server settings are saved | Full playback persistence or a Settings-only mode that discards playback state |
+| Installation and updates | ZIP-based updater, Docker configuration, and Python 3.9+ support | Managed Python 3.12–3.14 environment, managed FFmpeg maintenance, and confirmation-based Git updates; no Docker setup |
+
+### Added or substantially changed in this fork
+
+- `/replay` for restarting the current finite track.
+- Dormant sessions that preserve the current track and timestamp without remaining connected to voice.
+- Ordered background imports with visible pending counts; unfinished imports can resume after a restart.
+- Expanded queue controls, including separate removal and jump menus that update when the queue changes.
+- Search results with artwork, duration, uploader information, and automatic dismissal after a selection.
+- A controller with artwork, volume controls, one-second timestamps, and no extra confirmation messages from its playback buttons.
+- `/setup channelmove` and more granular allowlist management.
+- A Settings-only persistence option and a reworked terminal dashboard, maintenance flow, and updater.
+
+### Present upstream but removed from this fork
+
+- Discord file uploads and local-file playback (`/play-files` and the file option on `/playnext`).
+- Audio filters such as slowed, nightcore, reverb, and bass boost.
+- Lyrics and synced karaoke, including the optional Genius integration.
+- 24/7 voice modes; dormant sessions are used instead.
+- Kawaii mode and its alternate message set.
+- Per-server default volume configuration.
+- `/play` autocomplete suggestions and the `/support` command.
+- Docker files and the separate documentation website.
+
 ## Requirements
 
 - Windows 10/11 x64 or Linux x86-64
