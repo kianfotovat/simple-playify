@@ -22,6 +22,19 @@ RED = "#E74C3C"
 GREEN = "#27AE60"
 YELLOW = "#F1C40F"
 
+# Dashboard palette: vivid accents over neutral chrome. These remain visually
+# distinct when Rich downsamples them to the standard 16-color ANSI palette.
+DASH_PURPLE = "#C678DD"
+DASH_CYAN = "#5CCFE6"
+DASH_PINK = "#F071A7"
+DASH_ORANGE = "#FFAE57"
+DASH_GREEN = "#A6E22E"
+DASH_YELLOW = "#FFD866"
+DASH_RED = "#FF5C57"
+DASH_TEXT = "#D8DEE9"
+DASH_MUTED = "#68707D"
+DASH_BORDER = "#3B4261"
+
 # ─── Rich Theme ──────────────────────────────────────────────────────────────
 PLAYIFY_THEME = Theme(
     {
@@ -51,6 +64,25 @@ PLAYIFY_THEME = Theme(
         "music.time": Style(color=BLUE_LIGHT),
         "hotkey": Style(color=BLUE_ICE, bold=True),
         "hotkey.desc": Style(color=GRAY),
+        "dash.purple": Style(color=DASH_PURPLE, bold=True),
+        "dash.cyan": Style(color=DASH_CYAN, bold=True),
+        "dash.pink": Style(color=DASH_PINK, bold=True),
+        "dash.orange": Style(color=DASH_ORANGE, bold=True),
+        "dash.green": Style(color=DASH_GREEN, bold=True),
+        "dash.yellow": Style(color=DASH_YELLOW, bold=True),
+        "dash.red": Style(color=DASH_RED, bold=True),
+        "dash.text": Style(color=DASH_TEXT),
+        "dash.value": Style(color=DASH_TEXT, bold=True),
+        "dash.muted": Style(color=DASH_MUTED),
+        "dash.border": Style(color=DASH_BORDER),
+        "dash.status.online": Style(color="#111318", bgcolor=DASH_GREEN, bold=True),
+        "dash.status.starting": Style(color="#111318", bgcolor=DASH_YELLOW, bold=True),
+        "dash.status.offline": Style(color="#FFFFFF", bgcolor=DASH_RED, bold=True),
+        "dash.log.debug": Style(color=DASH_MUTED, bold=True),
+        "dash.log.info": Style(color=DASH_CYAN, bold=True),
+        "dash.log.warning": Style(color=DASH_YELLOW, bold=True),
+        "dash.log.error": Style(color=DASH_RED, bold=True),
+        "dash.log.source": Style(color=DASH_PURPLE),
     }
 )
 
