@@ -401,7 +401,7 @@ class CommandSuite:
             message("player.paused", title=safe_text(track.title))
             if changed and track
             else message("player.nothing_playing"),
-            lifetime="success" if changed else "error",
+            lifetime="success",
         )
 
     async def resume(self, interaction: discord.Interaction) -> None:
@@ -430,7 +430,7 @@ class CommandSuite:
             message("player.replayed", title=safe_text(track.title))
             if changed and track
             else message("player.live_seek" if track else "player.nothing_playing"),
-            lifetime="success" if changed else "error",
+            lifetime="success" if changed or not track else "error",
         )
 
     async def seek(self, interaction: discord.Interaction, timestamp: str | None = None) -> None:
@@ -438,7 +438,7 @@ class CommandSuite:
         await self._wake(interaction, session)
         if not session.state.current:
             await self.app.responses.send(
-                interaction, message("player.nothing_playing"), lifetime="error"
+                interaction, message("player.nothing_playing"), lifetime="success"
             )
             return
         if timestamp is None:
@@ -463,7 +463,11 @@ class CommandSuite:
                 "live streams cannot be seeked": "player.live_seek",
                 "timestamp is outside the current track": "player.seek_range",
             }.get(str(exc), "player.nothing_playing")
-            await self.app.responses.send(interaction, message(key), lifetime="error")
+            await self.app.responses.send(
+                interaction,
+                message(key),
+                lifetime="success" if key == "player.nothing_playing" else "error",
+            )
 
     async def skip(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
@@ -548,7 +552,7 @@ class CommandSuite:
             )
         except ValueError:
             await self.app.responses.send(
-                interaction, message("player.nothing_playing"), lifetime="error"
+                interaction, message("player.nothing_playing"), lifetime="success"
             )
 
     async def autoplay(self, interaction: discord.Interaction, query: str | None = None) -> None:

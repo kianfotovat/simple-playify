@@ -399,7 +399,9 @@ class SeekTimestampModal(discord.ui.Modal, title="Jump To"):
                 "timestamp is outside the current track": "player.seek_range",
             }.get(str(exc), "player.nothing_playing")
             await self.seek_view.responses.send(
-                interaction, message(key), lifetime="error"
+                interaction,
+                message(key),
+                lifetime="success" if key == "player.nothing_playing" else "error",
             )
             return
         await interaction.response.edit_message(
