@@ -20,6 +20,7 @@ BRAND_GRADIENT = (
 # distinct when Rich downsamples them to the standard 16-color ANSI palette.
 DASH_PURPLE = "#C678DD"
 DASH_CYAN = "#5CCFE6"
+DASH_BLUE = "#82AAFF"
 DASH_PINK = "#F071A7"
 DASH_ORANGE = "#FFAE57"
 DASH_GREEN = "#A6E22E"
@@ -60,6 +61,7 @@ PLAYIFY_THEME = Theme(
         "hotkey.desc": Style(color=DASH_MUTED),
         "dash.purple": Style(color=DASH_PURPLE, bold=True),
         "dash.cyan": Style(color=DASH_CYAN, bold=True),
+        "dash.blue": Style(color=DASH_BLUE, bold=True),
         "dash.pink": Style(color=DASH_PINK, bold=True),
         "dash.orange": Style(color=DASH_ORANGE, bold=True),
         "dash.green": Style(color=DASH_GREEN, bold=True),

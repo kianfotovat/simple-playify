@@ -60,7 +60,7 @@ def _metrics(bot: BotProcess, *, ascii_symbols: bool) -> Panel:
         (
             message("tui.dashboard.metric.players"),
             str(bot.metrics.get("players", 0)),
-            "dash.green" if bot.metrics.get("players", 0) else "dash.muted",
+            "dash.blue" if bot.metrics.get("players", 0) else "dash.muted",
         ),
         (
             message("tui.dashboard.metric.queued"),
@@ -72,7 +72,7 @@ def _metrics(bot: BotProcess, *, ascii_symbols: bool) -> Panel:
         (
             message("tui.dashboard.metric.crashes"),
             str(bot.crash_count),
-            "dash.red" if bot.crash_count else "dash.muted",
+            "dash.red" if bot.crash_count else "dash.green",
         ),
     ]
     grid = Table.grid(expand=True, padding=(0, 2))
