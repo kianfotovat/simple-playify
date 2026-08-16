@@ -34,6 +34,17 @@ DASH_RED = "#FF5C57"
 DASH_TEXT = "#D8DEE9"
 DASH_MUTED = "#68707D"
 DASH_BORDER = "#3B4261"
+BRAND_PURPLE = "#7571D5"
+BRAND_PALE = "#DCDCF5"
+BRAND_GRADIENT = (
+    "#7571D5",
+    "#8683DB",
+    "#9894E0",
+    "#AAA6E6",
+    "#BBB8EB",
+    "#CDCAF0",
+    BRAND_PALE,
+)
 
 # ─── Rich Theme ──────────────────────────────────────────────────────────────
 PLAYIFY_THEME = Theme(
@@ -75,6 +86,7 @@ PLAYIFY_THEME = Theme(
         "dash.value": Style(color=DASH_TEXT, bold=True),
         "dash.muted": Style(color=DASH_MUTED),
         "dash.border": Style(color=DASH_BORDER),
+        "brand": Style(color=BRAND_PURPLE, bold=True),
         "dash.status.online": Style(color="#111318", bgcolor=DASH_GREEN, bold=True),
         "dash.status.starting": Style(color="#111318", bgcolor=DASH_YELLOW, bold=True),
         "dash.status.offline": Style(color="#FFFFFF", bgcolor=DASH_RED, bold=True),
@@ -82,23 +94,8 @@ PLAYIFY_THEME = Theme(
         "dash.log.info": Style(color=DASH_CYAN, bold=True),
         "dash.log.warning": Style(color=DASH_YELLOW, bold=True),
         "dash.log.error": Style(color=DASH_RED, bold=True),
-        "dash.log.source": Style(color=DASH_PURPLE),
     }
 )
-
-# ─── Gradient Colors for ASCII Art ───────────────────────────────────────────
-GRADIENT_COLORS = [
-    "#0D2137",  # Deep navy
-    "#14344E",
-    "#1B4769",
-    "#1F5F8B",
-    "#2471A3",
-    "#2E86C1",
-    "#3498DB",
-    "#5DADE2",
-    "#85C1E9",
-    "#AED6F1",  # Pale ice
-]
 
 # ─── Box Characters ──────────────────────────────────────────────────────────
 BOX_H = "━"

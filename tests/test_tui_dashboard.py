@@ -11,7 +11,7 @@ from rich.style import Style
 from rich.theme import Theme
 
 from src.playify.config import Config
-from src.tui.dashboard import _dashboard, _log_text
+from src.tui.dashboard import _brand, _dashboard, _hotkeys, _log_text
 from src.tui.main import _console
 from src.tui.theme import PLAYIFY_THEME
 
@@ -108,7 +108,7 @@ class DashboardColorTests(TestCase):
             color_system="truecolor",
             width=120,
         )
-        color_console.print(_dashboard(FakeBot(), 120, 40))
+        color_console.print(_dashboard(FakeBot(), 120, 40, color_system="truecolor"))
 
         plain_output = StringIO()
         plain_console = Console(
@@ -140,7 +140,7 @@ class DashboardColorTests(TestCase):
             color_system="standard",
             width=120,
         )
-        console.print(_dashboard(FakeBot(), 120, 40))
+        console.print(_dashboard(FakeBot(), 120, 40, color_system="standard"))
 
         for color in ("\x1b[1;91m", "\x1b[1;92m", "\x1b[1;93m", "\x1b[1;95m", "\x1b[1;96m"):
             self.assertIn(color, output.getvalue())
@@ -160,4 +160,19 @@ class DashboardColorTests(TestCase):
         self.assertIn("dash.log.warning", styles)
         self.assertIn("dash.log.error", styles)
         self.assertIn("dash.log.debug", styles)
-        self.assertIn("dash.log.source", styles)
+        self.assertIn("brand", styles)
+
+    def test_brand_gradient_has_solid_fallback(self) -> None:
+        gradient = _brand("truecolor")
+        fallback = _brand("standard")
+
+        self.assertEqual(len(gradient.spans), len("PLAYIFY"))
+        self.assertEqual(len({span.style.color for span in gradient.spans}), len("PLAYIFY"))
+        self.assertEqual(fallback.style, "brand")
+        self.assertFalse(fallback.spans)
+
+    def test_hotkeys_use_one_accent(self) -> None:
+        hotkeys = _hotkeys().renderable.renderable
+
+        key_styles = [span.style for span in hotkeys.spans if span.style == "brand"]
+        self.assertEqual(len(key_styles), 7)

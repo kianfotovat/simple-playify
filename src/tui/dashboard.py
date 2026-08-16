@@ -11,6 +11,7 @@ from rich.align import Align
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.style import Style
 from rich.table import Table
 from rich.text import Text
 
@@ -20,6 +21,7 @@ from src.playify.messages import message
 
 from .bot_process import BotProcess
 from .key_input import read_key, terminal_mode
+from .theme import BRAND_GRADIENT
 
 LOG_LINE = re.compile(
     r"^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[,.]\d+)?)\s+"
@@ -81,7 +83,7 @@ def _metrics(bot: BotProcess, *, ascii_symbols: bool) -> Panel:
     grid.add_row(*metrics[4:])
     return Panel(
         grid,
-        title=Text(f" {message('tui.dashboard.runtime')} ", style="dash.purple"),
+        title=Text(f" {message('tui.dashboard.runtime')} ", style="brand"),
         border_style="dash.border",
         padding=(0, 1),
     )
@@ -101,16 +103,16 @@ def _now_playing(bot: BotProcess) -> Panel:
         content.append(state.upper(), style="dash.green" if active else "dash.yellow")
         content.append("\n")
         content.append(message("tui.dashboard.detail.guild") + " ", style="dash.muted")
-        content.append(str(player.get("guild_id")), style="dash.cyan")
+        content.append(str(player.get("guild_id")), style="brand")
         content.append(separator, style="dash.muted")
-        content.append(str(player.get("queued", 0)), style="dash.orange")
+        content.append(str(player.get("queued", 0)), style="brand")
         content.append(" " + message("tui.dashboard.detail.queued"), style="dash.muted")
         content.append(separator, style="dash.muted")
-        content.append(str(player.get("pending", 0)), style="dash.pink")
+        content.append(str(player.get("pending", 0)), style="brand")
         content.append(" " + message("tui.dashboard.detail.pending"), style="dash.muted")
     return Panel(
         content,
-        title=Text(f" {message('controller.title.playing')} ", style="dash.cyan"),
+        title=Text(f" {message('controller.title.playing')} ", style="brand"),
         border_style="dash.border",
         padding=(0, 1),
     )
@@ -132,7 +134,7 @@ def _log_text(lines: list[str]) -> Text:
             text.append(match.group("timestamp"), style="dash.muted")
             text.append("  ")
             text.append(f"{level:<8}", style=level_style)
-            text.append(match.group("source"), style="dash.log.source")
+            text.append(match.group("source"), style="brand")
             text.append("  ", style="dash.muted")
             text.append(match.group("body"), style="dash.text")
         else:
@@ -146,17 +148,25 @@ def _logs(bot: BotProcess, height: int) -> Panel:
     lines = bot.recent_logs(max(3, height))
     return Panel(
         _log_text(lines),
-        title=Text(f" {message('tui.dashboard.logs.recent')} ", style="dash.orange"),
+        title=Text(f" {message('tui.dashboard.logs.recent')} ", style="brand"),
         border_style="dash.border",
         height=height + 2,
         padding=(0, 1),
     )
 
 
-def _header(bot: BotProcess, separator: str) -> Panel:
+def _brand(color_system: str | None) -> Text:
+    if color_system != "truecolor":
+        return Text("PLAYIFY", style="brand")
+
     brand = Text()
-    brand.append("PLAY", style="dash.purple")
-    brand.append("IFY", style="dash.pink")
+    for character, color in zip("PLAYIFY", BRAND_GRADIENT, strict=True):
+        brand.append(character, style=Style(color=color, bold=True))
+    return brand
+
+
+def _header(bot: BotProcess, separator: str, color_system: str | None) -> Panel:
+    brand = _brand(color_system)
     brand.append(f"  {display_version()}", style="dash.muted")
 
     status = Text()
@@ -180,23 +190,23 @@ def _header(bot: BotProcess, separator: str) -> Panel:
 def _hotkeys() -> Panel:
     text = Text()
     bindings = [
-        ("L", "Logs", "dash.purple"),
-        ("C", "Config", "dash.cyan"),
-        ("S", "Settings", "dash.pink"),
-        ("U", "Update", "dash.orange"),
-        ("M", "Maintenance", "dash.yellow"),
-        ("R", "Restart", "dash.green"),
-        ("Q", "Quit", "dash.red"),
+        ("L", "Logs"),
+        ("C", "Config"),
+        ("S", "Settings"),
+        ("U", "Update"),
+        ("M", "Maintenance"),
+        ("R", "Restart"),
+        ("Q", "Quit"),
     ]
-    for index, (key, label, style) in enumerate(bindings):
+    for index, (key, label) in enumerate(bindings):
         if index:
             text.append("   ")
-        text.append(key, style=style)
+        text.append(key, style="brand")
         text.append(f" {label}", style="dash.muted")
     return Panel(Align.center(text), border_style="dash.border", padding=(0, 1))
 
 
-def _dashboard(bot: BotProcess, width: int, height: int):
+def _dashboard(bot: BotProcess, width: int, height: int, *, color_system: str | None = None):
     ascii_symbols = Config.get("symbol_mode", "auto") == "ascii"
     separator = " | " if ascii_symbols else " • "
     size = f"{width}x{height}" if ascii_symbols else f"{width}×{height}"
@@ -215,7 +225,7 @@ def _dashboard(bot: BotProcess, width: int, height: int):
         )
     log_height = max(4, height - 18 - (3 if not bot.is_running else 0))
     items = [
-        _header(bot, separator),
+        _header(bot, separator, color_system),
         _metrics(bot, ascii_symbols=ascii_symbols),
         _now_playing(bot),
         _logs(bot, log_height),
@@ -257,7 +267,7 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
             live.update(
                 Panel(
                     text,
-                    title=Text(f" {message('tui.dashboard.logs.full')} ", style="dash.orange"),
+                    title=Text(f" {message('tui.dashboard.logs.full')} ", style="brand"),
                     subtitle=footer,
                     border_style="dash.border",
                 ),
@@ -291,7 +301,7 @@ def run_dashboard(console: Console, bot: BotProcess) -> str:
     with terminal_mode(), Live(console=console, screen=True, auto_refresh=False) as live:
         while True:
             width, height = shutil.get_terminal_size((120, 40))
-            live.update(_dashboard(bot, width, height), refresh=True)
+            live.update(_dashboard(bot, width, height, color_system=console.color_system), refresh=True)
             key = read_key()
             if key == "l":
                 live.stop()
