@@ -271,6 +271,30 @@ class ControllerManager:
         if not views:
             self.queue_views.pop(view.session.guild_id, None)
 
+    async def recreate(self, session: PlayerSession) -> bool:
+        """Delete and recreate the active controller at the bottom of its channel."""
+
+        self._stop_ticker(session.guild_id)
+        edit_task = self.edit_tasks.pop(session.guild_id, None)
+        if edit_task and not edit_task.done():
+            edit_task.cancel()
+            await asyncio.gather(edit_task, return_exceptions=True)
+        self.dirty.discard(session.guild_id)
+        self.view_dirty.discard(session.guild_id)
+        if session.state.controller_channel_id and session.state.controller_message_id:
+            await self._delete_message(
+                session.state.controller_channel_id,
+                session.state.controller_message_id,
+            )
+        session.state.controller_channel_id = None
+        session.state.controller_message_id = None
+        await self.storage.clear_controller_cleanup(session.guild_id)
+        if not session.active:
+            await self.storage.save_player(session.state)
+            return False
+        await self.ensure(session)
+        return session.state.controller_message_id is not None
+
     async def startup_cleanup(self) -> None:
         pointers = await self.storage.pop_controller_cleanups()
         pointers.extend(

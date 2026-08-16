@@ -13,7 +13,7 @@ from .discord_utils import duration_text, format_time, safe_text
 from .messages import message
 from .models import ServerSettings, Track
 from .services.player import PlayerSession, _human_count
-from .ui.views import ChannelPaginator, NowPlayingView, SearchView, SeekView
+from .ui.views import ChannelPaginator, SearchView, SeekView
 
 LOGGER = logging.getLogger(__name__)
 
@@ -606,16 +606,20 @@ class CommandSuite:
 
     async def nowplaying(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
-        track = session.state.current
-        if not track:
+        if not session.state.current:
             await self.app.responses.send(interaction, message("player.empty"))
             return
-        view = NowPlayingView(session, self.app.responses)
-        sent = await self.app.responses.send(
-            interaction, embed=view.embed(), view=view, lifetime="interactive"
-        )
-        view.message = sent
-        view.start_ticker()
+        if not session.active:
+            await self.app.responses.send(
+                interaction, message("voice.dormant"), lifetime="success"
+            )
+            return
+        await interaction.response.defer()
+        await self.app.controllers.recreate(session)
+        try:
+            await interaction.delete_original_response()
+        except discord.NotFound:
+            pass
 
     async def status(self, interaction: discord.Interaction) -> None:
         players = sum(1 for session in self.app.players.sessions.values() if session.active or session.state.dormant)
