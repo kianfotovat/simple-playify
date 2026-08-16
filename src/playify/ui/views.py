@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Sequence
 
 import discord
 
-from ..discord_utils import Responses, format_time, progress_bar, safe_text
+from ..discord_utils import Responses, duration_text, format_time, progress_bar, safe_text
 from ..messages import message
 from ..models import Track
 from ..services.player import PlayerSession
@@ -53,6 +53,27 @@ async def dismiss_message(
         await interaction.delete_original_response()
     except discord.NotFound:
         pass
+
+
+class DismissView(discord.ui.View):
+    """A minimal Close control for an otherwise informational message."""
+
+    def __init__(self, responses: Responses) -> None:
+        super().__init__(timeout=120)
+        self.responses = responses
+        self.message: discord.Message | None = None
+        close = discord.ui.Button(
+            label="Close", emoji="✖️", style=discord.ButtonStyle.danger
+        )
+
+        async def close_view(interaction: discord.Interaction) -> None:
+            await dismiss_message(self, self.responses, interaction, self.message)
+
+        close.callback = close_view
+        self.add_item(close)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await allowed_interaction(self.responses, interaction)
 
 
 class QueueView(discord.ui.View):
@@ -213,7 +234,10 @@ class SearchView(discord.ui.View):
             options=[
                 discord.SelectOption(
                     label=track.title[:100],
-                    description=track.uploader[:100],
+                    description=(
+                        f"{track.uploader} • "
+                        f"{duration_text(track.duration, live=track.is_live)}"
+                    )[:100],
                     value=str(index),
                 )
                 for index, track in enumerate(self.tracks)
