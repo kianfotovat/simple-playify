@@ -76,10 +76,17 @@ class ControllerView(discord.ui.View):
         row: int,
         callback,
         *,
+        custom_id: str,
         emoji: str | None = None,
         style: discord.ButtonStyle = discord.ButtonStyle.secondary,
     ) -> None:
-        button = discord.ui.Button(label=label, emoji=emoji, row=row, style=style)
+        button = discord.ui.Button(
+            label=label,
+            emoji=emoji,
+            row=row,
+            style=style,
+            custom_id=f"playify:controller:{custom_id}",
+        )
         button.callback = callback
         self.add_item(button)
 
@@ -151,29 +158,52 @@ class ControllerView(discord.ui.View):
 
         paused = self.session.state.paused
         self._button(
-            "Previous", 0, previous, emoji="⏮️", style=discord.ButtonStyle.primary
+            "Previous",
+            0,
+            previous,
+            custom_id="previous",
+            emoji="⏮️",
+            style=discord.ButtonStyle.primary,
         )
         self._button(
             "Play" if paused else "Pause",
             0,
             pause_resume,
+            custom_id="play_pause",
             emoji="▶️" if paused else "⏸️",
             style=discord.ButtonStyle.success if paused else discord.ButtonStyle.secondary,
         )
-        self._button("Skip", 0, skip, emoji="⏭️", style=discord.ButtonStyle.primary)
         self._button(
-            "Stop", 0, stop, emoji="⏹️", style=discord.ButtonStyle.danger
+            "Skip",
+            0,
+            skip,
+            custom_id="skip",
+            emoji="⏭️",
+            style=discord.ButtonStyle.primary,
         )
         self._button(
-            "✚︎ Add Song", 0, add, style=discord.ButtonStyle.success
+            "Stop",
+            0,
+            stop,
+            custom_id="stop",
+            emoji="⏹️",
+            style=discord.ButtonStyle.danger,
         )
-        self._button("Vol-", 1, volume_down, emoji="🔉")
-        self._button("Vol+", 1, volume_up, emoji="🔊")
-        self._button("Shuffle", 1, shuffle, emoji="🔀")
+        self._button(
+            "✚︎ Add Song",
+            0,
+            add,
+            custom_id="add",
+            style=discord.ButtonStyle.success,
+        )
+        self._button("Vol-", 1, volume_down, custom_id="volume_down", emoji="🔉")
+        self._button("Vol+", 1, volume_up, custom_id="volume_up", emoji="🔊")
+        self._button("Shuffle", 1, shuffle, custom_id="shuffle", emoji="🔀")
         self._button(
             "Loop",
             1,
             loop,
+            custom_id="loop",
             emoji="🔁",
             style=(
                 discord.ButtonStyle.success
@@ -185,6 +215,7 @@ class ControllerView(discord.ui.View):
             "Autoplay",
             1,
             autoplay,
+            custom_id="autoplay",
             emoji="➡️",
             style=(
                 discord.ButtonStyle.success
@@ -193,9 +224,14 @@ class ControllerView(discord.ui.View):
             ),
         )
         self._button(
-            "Show Queue", 2, queue, emoji="📜", style=discord.ButtonStyle.primary
+            "Show Queue",
+            2,
+            queue,
+            custom_id="queue",
+            emoji="📜",
+            style=discord.ButtonStyle.primary,
         )
-        self._button("Jump To", 2, jump, emoji="⤵️")
+        self._button("Jump To", 2, jump, custom_id="jump", emoji="⤵️")
 
 
 class ControllerManager:
@@ -214,6 +250,7 @@ class ControllerManager:
         self.ticker_tasks: dict[int, asyncio.Task[None]] = {}
         self.queue_views: dict[int, set[QueueView]] = {}
         self.dirty: set[int] = set()
+        self.view_dirty: set[int] = set()
         self.expected_deletions: dict[tuple[int, int], float] = {}
 
     def queue_view(self, session: PlayerSession, action: str = "view") -> QueueView:
@@ -291,7 +328,7 @@ class ControllerManager:
             f"{len(session.state.pending)} pending"
         )
         embed = discord.Embed(
-            title="🎵 Now Playing" if current else "⏳ Waiting for a Track",
+            title="Now Playing" if current else "Waiting for a Track",
             description=now,
             color=color,
         )
@@ -347,8 +384,12 @@ class ControllerManager:
         except (discord.Forbidden, discord.HTTPException):
             LOGGER.exception("Could not create controller for guild %s", session.guild_id)
 
-    def request_update(self, session: PlayerSession) -> None:
+    def request_update(
+        self, session: PlayerSession, *, refresh_view: bool = False
+    ) -> None:
         self.dirty.add(session.guild_id)
+        if refresh_view:
+            self.view_dirty.add(session.guild_id)
         task = self.edit_tasks.get(session.guild_id)
         if task and not task.done():
             return
@@ -358,12 +399,17 @@ class ControllerManager:
                 while session.guild_id in self.dirty:
                     self.dirty.discard(session.guild_id)
                     await asyncio.sleep(0.15)
+                    refresh_view = session.guild_id in self.view_dirty
+                    self.view_dirty.discard(session.guild_id)
                     channel = self.bot.get_channel(session.state.controller_channel_id or 0)
                     if not channel or not hasattr(channel, "fetch_message"):
                         return
                     try:
                         sent = await channel.fetch_message(session.state.controller_message_id)  # type: ignore[union-attr]
-                        await sent.edit(embed=self.embed(session), view=ControllerView(self, session))
+                        kwargs = {"embed": self.embed(session)}
+                        if refresh_view:
+                            kwargs["view"] = ControllerView(self, session)
+                        await sent.edit(**kwargs)
                     except discord.NotFound:
                         session.state.controller_channel_id = None
                         session.state.controller_message_id = None
@@ -446,7 +492,19 @@ class ControllerManager:
             return
         if session.active:
             await self.ensure(session)
-            self.request_update(session)
+            self.request_update(
+                session,
+                refresh_view=event
+                in {
+                    "autoplay",
+                    "loop",
+                    "paused",
+                    "reconnected_paused",
+                    "resumed",
+                    "track_selected",
+                    "track_started",
+                },
+            )
             if session.state.paused:
                 self._stop_ticker(session.guild_id)
             else:
@@ -477,6 +535,7 @@ class ControllerManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self.ticker_tasks.clear()
+        self.view_dirty.clear()
         for session in self.players.sessions.values():
             if session.state.controller_channel_id and session.state.controller_message_id:
                 await self._delete_message(
