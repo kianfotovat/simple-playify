@@ -71,7 +71,7 @@ async def current_browser_user_agent() -> str:
             except OSError as exc:
                 LOGGER.warning("Could not cache Chrome %s: %s", chrome_major, exc)
         LOGGER.info("Using Chrome %s user agent from the stable release feed", chrome_major)
-    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+    except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
         LOGGER.warning(
             "Could not resolve the stable Chrome version; using Chrome %s: %s",
             chrome_major,
@@ -318,7 +318,7 @@ class HttpClient:
                     if validate:
                         await validate_url(final_url)
                     return HttpResult(final_url, status, response_headers, body)
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (aiohttp.ClientError, TimeoutError) as exc:
                 if attempt >= 3:
                     raise
                 LOGGER.warning("Transient HTTP failure for %s: %s", current, exc)
