@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 import discord
 
 from ..config import Config
-from ..discord_utils import Responses, format_time, safe_text
+from ..discord_utils import Responses, format_time, safe_text, source_text
 from ..messages import message
 from ..services.extractor import public_canonical_link
 from ..services.player import PlayerManager, PlayerSession, _human_count
@@ -65,9 +65,8 @@ class ControllerView(discord.ui.View):
             return False
         current = self.session.state.controller_message_id
         if interaction.message is None or interaction.message.id != current:
-            await self.manager.responses.send(
-                interaction, message("controller.stale"), lifetime="error"
-            )
+            if not interaction.response.is_done():
+                await interaction.response.defer()
             return False
         return True
 
@@ -85,71 +84,56 @@ class ControllerView(discord.ui.View):
         self.add_item(button)
 
     def _add_buttons(self) -> None:
+        async def acknowledge(interaction: discord.Interaction) -> None:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+
         async def previous(interaction: discord.Interaction) -> None:
-            track = await self.session.previous()
-            await self.manager.responses.send(
-                interaction,
-                message("player.playing", title=safe_text(track.title))
-                if track
-                else message("player.history_empty"),
-                lifetime="success" if track else "error",
-            )
+            await acknowledge(interaction)
+            await self.session.previous()
 
         async def pause_resume(interaction: discord.Interaction) -> None:
+            await acknowledge(interaction)
             if self.session.state.paused:
-                changed = await self.session.resume()
-                text = message("player.resumed", title=safe_text(self.session.state.current.title)) if changed and self.session.state.current else message("voice.dormant")
+                await self.session.resume()
             else:
-                changed = await self.session.pause()
-                text = message("player.paused", title=safe_text(self.session.state.current.title)) if changed and self.session.state.current else message("player.nothing_playing")
-            await self.manager.responses.send(
-                interaction, text, lifetime="success" if changed else "error"
-            )
+                await self.session.pause()
 
         async def skip(interaction: discord.Interaction) -> None:
-            track = await self.session.skip()
-            await self.manager.responses.send(
-                interaction,
-                message("player.playing", title=safe_text(track.title))
-                if track
-                else message("player.queue_empty"),
-            )
+            await acknowledge(interaction)
+            await self.session.skip()
 
         async def stop(interaction: discord.Interaction) -> None:
+            await acknowledge(interaction)
             await self.session.stop()
-            await self.manager.responses.send(interaction, message("player.stopped"))
 
         async def add(interaction: discord.Interaction) -> None:
             await interaction.response.send_modal(AddTrackModal(self.session, self.manager.responses))
 
         async def shuffle(interaction: discord.Interaction) -> None:
-            count = await self.session.shuffle()
-            await self.manager.responses.send(interaction, message("player.shuffle", count=count))
+            await acknowledge(interaction)
+            await self.session.shuffle()
 
         async def loop(interaction: discord.Interaction) -> None:
+            await acknowledge(interaction)
             try:
-                enabled = await self.session.toggle_loop()
-                await self.manager.responses.send(
-                    interaction, message("player.loop", state="on" if enabled else "off")
-                )
+                await self.session.toggle_loop()
             except ValueError:
-                await self.manager.responses.send(
-                    interaction, message("player.nothing_playing"), lifetime="error"
-                )
+                pass
 
         async def autoplay(interaction: discord.Interaction) -> None:
-            enabled = await self.session.set_autoplay(not self.session.state.autoplay_enabled)
-            await self.manager.responses.send(
-                interaction, message("autoplay.enabled" if enabled else "autoplay.disabled")
+            await acknowledge(interaction)
+            await self.session.set_autoplay(
+                not self.session.state.autoplay_enabled
             )
 
         async def volume_down(interaction: discord.Interaction) -> None:
-            volume = await self.session.set_volume(self.session.state.volume - 10)
-            await self.manager.responses.send(interaction, message("player.volume", volume=volume))
+            await acknowledge(interaction)
+            await self.session.set_volume(self.session.state.volume - 10)
 
         async def volume_up(interaction: discord.Interaction) -> None:
-            volume = await self.session.set_volume(self.session.state.volume + 10)
-            await self.manager.responses.send(interaction, message("player.volume", volume=volume))
+            await acknowledge(interaction)
+            await self.session.set_volume(self.session.state.volume + 10)
 
         async def queue(interaction: discord.Interaction) -> None:
             view = self.manager.queue_view(self.session)
@@ -170,7 +154,7 @@ class ControllerView(discord.ui.View):
             "Previous", 0, previous, emoji="⏮️", style=discord.ButtonStyle.primary
         )
         self._button(
-            "Resume" if paused else "Pause",
+            "Play" if paused else "Pause",
             0,
             pause_resume,
             emoji="▶️" if paused else "⏸️",
@@ -181,7 +165,7 @@ class ControllerView(discord.ui.View):
             "Stop", 0, stop, emoji="⏹️", style=discord.ButtonStyle.danger
         )
         self._button(
-            "Add Song", 0, add, emoji="➕", style=discord.ButtonStyle.success
+            "✚︎ Add Song", 0, add, style=discord.ButtonStyle.success
         )
         self._button("Vol-", 1, volume_down, emoji="🔉")
         self._button("Vol+", 1, volume_up, emoji="🔊")
@@ -306,11 +290,16 @@ class ControllerManager:
             f"\n{len(session.state.queue)} upcoming • "
             f"{len(session.state.pending)} pending"
         )
-        embed = discord.Embed(title="Playify", color=color)
-        embed.add_field(name="Now Playing", value=now, inline=False)
+        embed = discord.Embed(
+            title="🎵 Now Playing" if current else "⏳ Waiting for a Track",
+            description=now,
+            color=color,
+        )
         embed.add_field(name="Up Next", value=up_next, inline=False)
         source = current.source if current else "idle"
-        embed.set_footer(text=f"{source} • Volume: {session.state.volume}%")
+        embed.set_footer(
+            text=f"{source_text(source)} • Volume: {session.state.volume}%"
+        )
         if current and current.thumbnail:
             embed.set_thumbnail(url=current.thumbnail)
         if not current:

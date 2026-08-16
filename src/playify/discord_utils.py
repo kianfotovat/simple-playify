@@ -45,6 +45,30 @@ def duration_text(duration: float | None, *, live: bool = False) -> str:
     return format_time(duration) if duration is not None else "Unknown duration"
 
 
+def source_text(source: str) -> str:
+    """Turn extractor identifiers into compact user-facing source names."""
+
+    normalized = source.strip().casefold()
+    known = (
+        ("youtube", "YouTube"),
+        ("soundcloud", "SoundCloud"),
+        ("bandcamp", "Bandcamp"),
+        ("twitch", "Twitch"),
+        ("vimeo", "Vimeo"),
+        ("dailymotion", "Dailymotion"),
+    )
+    for marker, label in known:
+        if marker in normalized:
+            return label
+    if normalized in {"direct", "generic"}:
+        return "Direct media"
+    if normalized in {"", "unknown"}:
+        return "Unknown source"
+    if normalized == "idle":
+        return "Idle"
+    return normalized.replace("_", " ").replace("-", " ").title()
+
+
 def progress_bar(fraction: float, segments: int = 10) -> str:
     filled = max(0, min(segments, round(fraction * segments)))
     return "█" * filled + "░" * (segments - filled)
