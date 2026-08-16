@@ -249,7 +249,7 @@ MESSAGES: dict[str, str] = {
     "tui.settings.soundcloud_fallback": "Use SoundCloud recommendation fallback",
     "tui.settings.private_media_allowlist": "Private host/IP/CIDR allowlist",
     "tui.settings.ip_mode": "Auto networking or force IPv4",
-    "tui.settings.youtube_clients": "yt-dlp YouTube client names",
+    "tui.settings.youtube_clients": "Optional yt-dlp YouTube clients (empty = automatic)",
     "tui.settings.worker_count": "Auto or 1-8 metadata workers",
     "tui.settings.http_concurrency": "Auto or 1-16 HTTP requests",
     "tui.settings.tui_refresh": "Auto or refresh rate in Hz",

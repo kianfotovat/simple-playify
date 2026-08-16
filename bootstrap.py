@@ -44,7 +44,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "soundcloud_fallback": True,
     "private_media_allowlist": [],
     "ip_mode": "auto",
-    "youtube_clients": ["web", "android", "ios"],
+    "youtube_clients": [],
     "worker_count": "auto",
     "http_concurrency": "auto",
     "tui_refresh": "auto",

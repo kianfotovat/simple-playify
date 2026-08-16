@@ -179,7 +179,8 @@ class Extractor:
         }
         if Config.get("ip_mode") == "ipv4":
             options["source_address"] = "0.0.0.0"
-        clients = Config.get("youtube_clients", ["web", "android", "ios"])
+        # Let yt-dlp track YouTube's working default clients unless the user has explicitly configured an override.
+        clients = Config.get("youtube_clients", [])
         if clients:
             options["extractor_args"] = {"youtube": {"player_client": list(clients)}}
         if cookie_file:
