@@ -13,6 +13,8 @@ from ..messages import message
 from ..models import Track
 from ..services.player import PlayerSession
 
+CLOSE_LABEL = "✖︎ Close"
+
 
 async def allowed_interaction(responses: Responses, interaction: discord.Interaction) -> bool:
     """Apply the current server allowlist to collaborative component interactions."""
@@ -25,6 +27,18 @@ async def allowed_interaction(responses: Responses, interaction: discord.Interac
     if settings and settings.allowlist and interaction.channel_id not in settings.allowlist and not manager:
         await responses.send(interaction, message("command.allowed_only"), lifetime="error")
         return False
+    return True
+
+
+async def active_interaction(
+    responses: Responses, interaction: discord.Interaction
+) -> bool:
+    """Apply channel policy and renew a short-lived view's inactivity timer."""
+
+    if not await allowed_interaction(responses, interaction):
+        return False
+    if interaction.message is not None:
+        await responses.expire(interaction.message, "interactive")
     return True
 
 
@@ -63,7 +77,7 @@ class DismissView(discord.ui.View):
         self.responses = responses
         self.message: discord.Message | None = None
         close = discord.ui.Button(
-            label="Close", emoji="✖️", style=discord.ButtonStyle.danger
+            label=CLOSE_LABEL, style=discord.ButtonStyle.danger
         )
 
         async def close_view(interaction: discord.Interaction) -> None:
@@ -73,7 +87,7 @@ class DismissView(discord.ui.View):
         self.add_item(close)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await allowed_interaction(self.responses, interaction)
+        return await active_interaction(self.responses, interaction)
 
 
 class QueueView(discord.ui.View):
@@ -94,7 +108,7 @@ class QueueView(discord.ui.View):
         self._rebuild()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await allowed_interaction(self.responses, interaction)
+        return await active_interaction(self.responses, interaction)
 
     def _tracks(self) -> list[Track]:
         return list(self.session.state.queue)
@@ -155,7 +169,7 @@ class QueueView(discord.ui.View):
             label="Next ➡️", disabled=self.page >= pages - 1, row=1
         )
         close = discord.ui.Button(
-            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
         )
 
         async def go_previous(interaction: discord.Interaction) -> None:
@@ -251,7 +265,7 @@ class SearchView(discord.ui.View):
         select.callback = selected
         self.add_item(select)
         close = discord.ui.Button(
-            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
         )
 
         async def close_view(interaction: discord.Interaction) -> None:
@@ -261,7 +275,7 @@ class SearchView(discord.ui.View):
         self.add_item(close)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await allowed_interaction(self.responses, interaction)
+        return await active_interaction(self.responses, interaction)
 
 
 def _parse_timestamp(value: str) -> float:
@@ -347,7 +361,7 @@ class SeekView(discord.ui.View):
         self.add_item(jump)
 
         close = discord.ui.Button(
-            label="Close", emoji="✖️", style=discord.ButtonStyle.danger, row=1
+            label=CLOSE_LABEL, style=discord.ButtonStyle.danger, row=1
         )
 
         async def close_view(interaction: discord.Interaction) -> None:
@@ -368,7 +382,7 @@ class SeekView(discord.ui.View):
         self.add_item(close)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await allowed_interaction(self.responses, interaction)
+        return await active_interaction(self.responses, interaction)
 
     def embed(self) -> discord.Embed:
         track = self.session.state.current
@@ -429,7 +443,7 @@ class ChannelPaginator(discord.ui.View):
         previous = discord.ui.Button(label="⬅️ Previous")
         following = discord.ui.Button(label="Next ➡️")
         close = discord.ui.Button(
-            label="Close", emoji="✖️", style=discord.ButtonStyle.danger
+            label=CLOSE_LABEL, style=discord.ButtonStyle.danger
         )
 
         def update_disabled() -> None:
@@ -459,7 +473,7 @@ class ChannelPaginator(discord.ui.View):
         update_disabled()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await allowed_interaction(self.responses, interaction)
+        return await active_interaction(self.responses, interaction)
 
     def embed(self) -> discord.Embed:
         pages = max(1, math.ceil(len(self.channels) / 10))
