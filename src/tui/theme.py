@@ -12,8 +12,8 @@ BRAND_GRADIENT = (
     "#9894E0",
     "#AAA6E6",
     "#BBB8EB",
-    "#CDCAF0",
-    BRAND_PALE,
+    "#C3BFEF",
+    "#CEC8F3",
 )
 
 # Interface accents over neutral chrome. These remain visually
@@ -26,7 +26,7 @@ DASH_GREEN = "#A6E22E"
 DASH_YELLOW = "#FFD866"
 DASH_RED = "#FF5C57"
 DASH_TEXT = "#D8DEE9"
-DASH_MUTED = "#68707D"
+DASH_MUTED = "#98A2B3"
 DASH_BORDER = "#3B4261"
 
 # ─── Rich Theme ──────────────────────────────────────────────────────────────

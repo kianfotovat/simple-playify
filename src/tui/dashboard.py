@@ -45,7 +45,7 @@ def refresh_rate() -> int:
 def _metric(label: str, value: str, style: str, *, ascii_symbols: bool) -> Text:
     text = Text()
     text.append("| " if ascii_symbols else "▌ ", style=style)
-    text.append(label.upper(), style="dash.muted")
+    text.append(label, style="dash.muted")
     text.append("\n  ")
     text.append(value, style=style)
     return text
@@ -72,7 +72,7 @@ def _metrics(bot: BotProcess, *, ascii_symbols: bool) -> Panel:
         (
             message("tui.dashboard.metric.crashes"),
             str(bot.crash_count),
-            "dash.red" if bot.crash_count else "dash.green",
+            "dash.red" if bot.crash_count else "dash.muted",
         ),
     ]
     grid = Table.grid(expand=True, padding=(0, 2))
@@ -100,7 +100,7 @@ def _now_playing(bot: BotProcess) -> Panel:
         content = Text()
         content.append(str(player.get("track") or message("tui.dashboard.unknown_track")), style="dash.value")
         content.append("  ")
-        content.append(state.upper(), style="dash.green" if active else "dash.yellow")
+        content.append(state.capitalize(), style="dash.green" if active else "dash.yellow")
         content.append("\n")
         content.append(message("tui.dashboard.detail.guild") + " ", style="dash.muted")
         content.append(str(player.get("guild_id")), style="brand")
@@ -157,10 +157,10 @@ def _logs(bot: BotProcess, height: int) -> Panel:
 
 def _brand(color_system: str | None) -> Text:
     if color_system != "truecolor":
-        return Text("PLAYIFY", style="brand")
+        return Text("Playify", style="brand")
 
     brand = Text()
-    for character, color in zip("PLAYIFY", BRAND_GRADIENT, strict=True):
+    for character, color in zip("Playify", BRAND_GRADIENT, strict=True):
         brand.append(character, style=Style(color=color, bold=True))
     return brand
 
@@ -171,11 +171,11 @@ def _header(bot: BotProcess, separator: str, color_system: str | None) -> Panel:
 
     status = Text()
     if bot.is_online:
-        status.append(f" {message('tui.dashboard.status.online')} ", style="dash.status.online")
+        status.append(message("tui.dashboard.status.online"), style="dash.status.online")
     elif bot.is_running:
-        status.append(f" {message('tui.dashboard.status.starting')} ", style="dash.status.starting")
+        status.append(message("tui.dashboard.status.starting"), style="dash.status.starting")
     else:
-        status.append(f" {message('tui.dashboard.status.offline')} ", style="dash.status.offline")
+        status.append(message("tui.dashboard.status.offline"), style="dash.status.offline")
     if restart := bot.metrics.get("restart_required"):
         status.append(separator, style="dash.muted")
         status.append(message("tui.dashboard.restart_badge", scope=restart), style="dash.yellow")
