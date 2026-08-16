@@ -49,6 +49,7 @@ class UpdateStatus:
     confirmed_dirty: tuple[str, ...] = field(default_factory=tuple)
     discard_confirmed: bool = False
     switch_confirmed: bool = False
+    needs_acknowledgement: bool = False
 
 
 def _git(
@@ -253,6 +254,7 @@ def _confirm_target(console: Console, status: UpdateStatus, target: str) -> bool
     conflicts = _path_conflicts(status.root, revisions)
     if conflicts:
         _show_conflicts(console, conflicts)
+        status.needs_acknowledgement = status.manual
         return False
     if status.branch != "main":
         label = escape(status.branch or message("tui.update.detached"))
@@ -289,16 +291,19 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
     if status.error:
         if status.manual:
             console.print(message("tui.update.check_skipped", error=escape(status.error)))
+            status.needs_acknowledgement = True
         return "skip"
     if status.suppressed_reason:
         return "skip"
     if status.relation in {"ahead", "diverged", "missing_main"}:
         if status.manual:
             console.print(message("tui.update.diverged"))
+            status.needs_acknowledgement = True
         return "skip"
     if status.relation == "up_to_date":
         if status.manual:
             console.print(message("tui.update.current", revision=status.main_sha[:7]))
+            status.needs_acknowledgement = True
         if status.manual and status.rollback_sha and status.rollback_sha != status.main_sha:
             choice = Prompt.ask(
                 message("tui.update.choose_action"),

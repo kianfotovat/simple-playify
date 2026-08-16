@@ -166,6 +166,8 @@ def main() -> None:
                     if not _stop_with_choice(console, bot):
                         continue
                     _perform_update(console, status, update_action)
+                elif status.needs_acknowledgement:
+                    wait_for_key(console)
             elif action == "restart":
                 if not Confirm.ask(message("tui.main.restart"), default=False):
                     continue
