@@ -110,9 +110,7 @@ class Storage:
 
         assert self.connection is not None
         await self.connection.executescript(SCHEMA)
-        await self.connection.execute(
-            "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('version', '1')"
-        )
+        await self.connection.execute("INSERT OR REPLACE INTO schema_meta(key, value) VALUES('version', '1')")
         if Config.get("persistence_mode") == "settings":
             await self.connection.execute("DELETE FROM player_states")
         await self.connection.commit()
@@ -263,17 +261,14 @@ class Storage:
     async def set_controller_cleanup(self, guild_id: int, channel_id: int, message_id: int) -> None:
         async with self._write_lock:
             await self._db().execute(
-                "INSERT OR REPLACE INTO controller_cleanup(guild_id, channel_id, message_id) "
-                "VALUES(?, ?, ?)",
+                "INSERT OR REPLACE INTO controller_cleanup(guild_id, channel_id, message_id) VALUES(?, ?, ?)",
                 (guild_id, channel_id, message_id),
             )
             await self._db().commit()
 
     async def pop_controller_cleanups(self) -> list[tuple[int, int, int]]:
         async with self._write_lock:
-            cursor = await self._db().execute(
-                "SELECT guild_id, channel_id, message_id FROM controller_cleanup"
-            )
+            cursor = await self._db().execute("SELECT guild_id, channel_id, message_id FROM controller_cleanup")
             rows = [(row[0], row[1], row[2]) for row in await cursor.fetchall()]
             await cursor.close()
             await self._db().execute("DELETE FROM controller_cleanup")
@@ -282,30 +277,20 @@ class Storage:
 
     async def clear_controller_cleanup(self, guild_id: int) -> None:
         async with self._write_lock:
-            await self._db().execute(
-                "DELETE FROM controller_cleanup WHERE guild_id = ?", (guild_id,)
-            )
+            await self._db().execute("DELETE FROM controller_cleanup WHERE guild_id = ?", (guild_id,))
             await self._db().commit()
 
-    async def add_deletion_job(
-        self, channel_id: int, message_id: int, delete_after: datetime, kind: str
-    ) -> None:
+    async def add_deletion_job(self, channel_id: int, message_id: int, delete_after: datetime, kind: str) -> None:
         async with self._write_lock:
             await self._db().execute(
-                "INSERT OR REPLACE INTO deletion_jobs(channel_id, message_id, delete_after, kind) "
-                "VALUES(?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO deletion_jobs(channel_id, message_id, delete_after, kind) VALUES(?, ?, ?, ?)",
                 (channel_id, message_id, delete_after.astimezone(UTC).isoformat(), kind),
             )
             await self._db().commit()
 
     async def list_deletion_jobs(self) -> list[tuple[int, int, datetime, str]]:
-        cursor = await self._db().execute(
-            "SELECT channel_id, message_id, delete_after, kind FROM deletion_jobs"
-        )
-        rows = [
-            (row[0], row[1], datetime.fromisoformat(row[2]), row[3])
-            for row in await cursor.fetchall()
-        ]
+        cursor = await self._db().execute("SELECT channel_id, message_id, delete_after, kind FROM deletion_jobs")
+        rows = [(row[0], row[1], datetime.fromisoformat(row[2]), row[3]) for row in await cursor.fetchall()]
         await cursor.close()
         return rows
 

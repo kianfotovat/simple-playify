@@ -121,8 +121,7 @@ class BotProcess:
         self.events[kind] += 1
         if kind == "log":
             self.logs.append(
-                f"{payload.get('level', 'INFO'):>7} {payload.get('logger', 'playify')}: "
-                f"{payload.get('message', '')}"
+                f"{payload.get('level', 'INFO'):>7} {payload.get('logger', 'playify')}: {payload.get('message', '')}"
             )
         elif kind == "heartbeat":
             self.metrics.update(payload)

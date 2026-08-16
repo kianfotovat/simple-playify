@@ -21,9 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AddTrackModal(discord.ui.Modal, title=message("controller.add.title")):
-    query = discord.ui.TextInput(
-        label=message("controller.add.query"), max_length=500
-    )
+    query = discord.ui.TextInput(label=message("controller.add.query"), max_length=500)
 
     def __init__(self, session: PlayerSession, responses: Responses) -> None:
         super().__init__()
@@ -40,23 +38,17 @@ class AddTrackModal(discord.ui.Modal, title=message("controller.add.title")):
             )
             return
         progress = await self.responses.progress(interaction, message("progress.resolving"))
-        pending = await self.session.enqueue(
-            str(self.query), requested_by=interaction.user.id, priority=False
-        )
+        pending = await self.session.enqueue(str(self.query), requested_by=interaction.user.id, priority=False)
         count, error = await self.session.wait_import(pending)
         if count:
             key = "player.import_partial_public" if error else "player.import_complete"
             await self.responses.finish_progress(progress, message(key, count=count))
         else:
-            await self.responses.finish_progress(
-                progress, message("player.not_found"), failed=True
-            )
+            await self.responses.finish_progress(progress, message("player.not_found"), failed=True)
 
 
 class ControllerView(discord.ui.View):
-    def __init__(
-        self, manager: "ControllerManager", session: PlayerSession
-    ) -> None:
+    def __init__(self, manager: ControllerManager, session: PlayerSession) -> None:
         super().__init__(timeout=None)
         self.manager = manager
         self.session = session
@@ -132,9 +124,7 @@ class ControllerView(discord.ui.View):
 
         async def autoplay(interaction: discord.Interaction) -> None:
             await acknowledge(interaction)
-            await self.session.set_autoplay(
-                not self.session.state.autoplay_enabled
-            )
+            await self.session.set_autoplay(not self.session.state.autoplay_enabled)
 
         async def volume_down(interaction: discord.Interaction) -> None:
             await acknowledge(interaction)
@@ -146,16 +136,12 @@ class ControllerView(discord.ui.View):
 
         async def queue(interaction: discord.Interaction) -> None:
             view = self.manager.queue_view(self.session)
-            sent = await self.manager.responses.send(
-                interaction, embed=view.embed(), view=view, lifetime="interactive"
-            )
+            sent = await self.manager.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
             view.message = sent
 
         async def jump(interaction: discord.Interaction) -> None:
             view = self.manager.queue_view(self.session, action="jump")
-            sent = await self.manager.responses.send(
-                interaction, embed=view.embed(), view=view, lifetime="interactive"
-            )
+            sent = await self.manager.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
             view.message = sent
 
         paused = self.session.state.paused
@@ -225,11 +211,7 @@ class ControllerView(discord.ui.View):
             loop,
             custom_id="loop",
             emoji="🔁",
-            style=(
-                discord.ButtonStyle.success
-                if self.session.state.loop_current
-                else discord.ButtonStyle.secondary
-            ),
+            style=(discord.ButtonStyle.success if self.session.state.loop_current else discord.ButtonStyle.secondary),
         )
         self._button(
             message("controller.button.autoplay"),
@@ -238,9 +220,7 @@ class ControllerView(discord.ui.View):
             custom_id="autoplay",
             emoji="➡️",
             style=(
-                discord.ButtonStyle.success
-                if self.session.state.autoplay_enabled
-                else discord.ButtonStyle.secondary
+                discord.ButtonStyle.success if self.session.state.autoplay_enabled else discord.ButtonStyle.secondary
             ),
         )
         self._button(
@@ -342,11 +322,7 @@ class ControllerManager:
 
     async def _delete_message(self, channel_id: int, message_id: int) -> None:
         now = time.monotonic()
-        self.expected_deletions = {
-            key: marked
-            for key, marked in self.expected_deletions.items()
-            if now - marked < 60
-        }
+        self.expected_deletions = {key: marked for key, marked in self.expected_deletions.items() if now - marked < 60}
         self.expected_deletions[(channel_id, message_id)] = now
         try:
             channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
@@ -361,11 +337,7 @@ class ControllerManager:
         if current:
             title = safe_text(current.title, 150)
             link = public_canonical_link(current)
-            display_title = (
-                message("controller.current.linked", title=title, link=link)
-                if link
-                else title
-            )
+            display_title = message("controller.current.linked", title=title, link=link) if link else title
             now = message(
                 "controller.current.details",
                 title=display_title,
@@ -392,15 +364,11 @@ class ControllerManager:
             pending=len(session.state.pending),
         )
         embed = discord.Embed(
-            title=message(
-                "controller.title.playing" if current else "controller.title.waiting"
-            ),
+            title=message("controller.title.playing" if current else "controller.title.waiting"),
             description=now,
             color=color,
         )
-        embed.add_field(
-            name=message("controller.field.up_next"), value=up_next, inline=False
-        )
+        embed.add_field(name=message("controller.field.up_next"), value=up_next, inline=False)
         source = current.source if current else "idle"
         embed.set_footer(
             text=message(
@@ -424,10 +392,7 @@ class ControllerManager:
         channel = self.bot.get_channel(session.state.text_channel_id or 0)
         if not isinstance(channel, (discord.VoiceChannel, discord.StageChannel)):
             return
-        if (
-            session.state.controller_message_id
-            and session.state.controller_channel_id != channel.id
-        ):
+        if session.state.controller_message_id and session.state.controller_channel_id != channel.id:
             if session.state.controller_channel_id:
                 await self._delete_message(
                     session.state.controller_channel_id,
@@ -456,9 +421,7 @@ class ControllerManager:
         except (discord.Forbidden, discord.HTTPException):
             LOGGER.exception("Could not create controller for guild %s", session.guild_id)
 
-    def request_update(
-        self, session: PlayerSession, *, refresh_view: bool = False
-    ) -> None:
+    def request_update(self, session: PlayerSession, *, refresh_view: bool = False) -> None:
         self.dirty.add(session.guild_id)
         if refresh_view:
             self.view_dirty.add(session.guild_id)
@@ -493,9 +456,7 @@ class ControllerManager:
             finally:
                 self.edit_tasks.pop(session.guild_id, None)
 
-        self.edit_tasks[session.guild_id] = asyncio.create_task(
-            edit_latest(), name=f"controller-{session.guild_id}"
-        )
+        self.edit_tasks[session.guild_id] = asyncio.create_task(edit_latest(), name=f"controller-{session.guild_id}")
 
     def _ensure_ticker(self, session: PlayerSession) -> None:
         if not (
@@ -529,9 +490,7 @@ class ControllerManager:
                 if self.ticker_tasks.get(session.guild_id) is asyncio.current_task():
                     self.ticker_tasks.pop(session.guild_id, None)
 
-        self.ticker_tasks[session.guild_id] = asyncio.create_task(
-            tick(), name=f"controller-ticker-{session.guild_id}"
-        )
+        self.ticker_tasks[session.guild_id] = asyncio.create_task(tick(), name=f"controller-ticker-{session.guild_id}")
 
     def _stop_ticker(self, guild_id: int) -> None:
         task = self.ticker_tasks.pop(guild_id, None)
@@ -542,9 +501,7 @@ class ControllerManager:
         for view in list(self.queue_views.get(session.guild_id, ())):
             await view.refresh()
         if event == "external_move" and session.state.controller_channel_id and session.state.controller_message_id:
-            await self._delete_message(
-                session.state.controller_channel_id, session.state.controller_message_id
-            )
+            await self._delete_message(session.state.controller_channel_id, session.state.controller_message_id)
             session.state.controller_channel_id = None
             session.state.controller_message_id = None
         if session.state.dormant or event in {
@@ -556,9 +513,7 @@ class ControllerManager:
         }:
             self._stop_ticker(session.guild_id)
             if session.state.controller_channel_id and session.state.controller_message_id:
-                await self._delete_message(
-                    session.state.controller_channel_id, session.state.controller_message_id
-                )
+                await self._delete_message(session.state.controller_channel_id, session.state.controller_message_id)
                 session.state.controller_channel_id = None
                 session.state.controller_message_id = None
                 await self.storage.clear_controller_cleanup(session.guild_id)
@@ -588,10 +543,7 @@ class ControllerManager:
         if self.expected_deletions.pop((channel_id, message_id), None) is not None:
             return
         for session in self.players.sessions.values():
-            if (
-                session.state.controller_channel_id == channel_id
-                and session.state.controller_message_id == message_id
-            ):
+            if session.state.controller_channel_id == channel_id and session.state.controller_message_id == message_id:
                 session.state.controller_channel_id = None
                 session.state.controller_message_id = None
                 await session.changed("controller_deleted")
@@ -612,9 +564,7 @@ class ControllerManager:
         self.view_dirty.clear()
         for session in self.players.sessions.values():
             if session.state.controller_channel_id and session.state.controller_message_id:
-                await self._delete_message(
-                    session.state.controller_channel_id, session.state.controller_message_id
-                )
+                await self._delete_message(session.state.controller_channel_id, session.state.controller_message_id)
                 await self.storage.clear_controller_cleanup(session.guild_id)
                 session.state.controller_channel_id = None
                 session.state.controller_message_id = None

@@ -6,12 +6,10 @@ import os
 import shutil
 import time
 
-from rich import box
 from rich.columns import Columns
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
 
 from src.playify.config import Config
@@ -58,11 +56,7 @@ def _now_playing(bot: BotProcess) -> Panel:
     if not player:
         content = message("tui.dashboard.no_track")
     else:
-        state = message(
-            "tui.dashboard.state.active"
-            if player.get("active")
-            else "tui.dashboard.state.dormant"
-        )
+        state = message("tui.dashboard.state.active" if player.get("active") else "tui.dashboard.state.dormant")
         content = message(
             "tui.dashboard.track",
             track=player.get("track") or message("tui.dashboard.unknown_track"),
@@ -71,9 +65,7 @@ def _now_playing(bot: BotProcess) -> Panel:
             queued=player.get("queued", 0),
             pending=player.get("pending", 0),
         )
-    return Panel(
-        content, title=message("controller.title.playing"), border_style="cyan"
-    )
+    return Panel(content, title=message("controller.title.playing"), border_style="cyan")
 
 
 def _logs(bot: BotProcess, height: int) -> Panel:
@@ -113,11 +105,7 @@ def _dashboard(bot: BotProcess, width: int, height: int):
         else "tui.dashboard.status.offline"
     )
     restart = bot.metrics.get("restart_required")
-    badge = (
-        separator + message("tui.dashboard.restart_badge", scope=restart)
-        if restart
-        else ""
-    )
+    badge = separator + message("tui.dashboard.restart_badge", scope=restart) if restart else ""
     header = Panel(
         message(
             "tui.dashboard.header",
@@ -152,7 +140,7 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
     rate = refresh_rate()
     with Live(console=console, screen=True, auto_refresh=False) as live:
         while True:
-            width, height = shutil.get_terminal_size((120, 40))
+            _width, height = shutil.get_terminal_size((120, 40))
             lines = list(bot.logs)
             page = max(1, height - 5)
             if following:
@@ -161,11 +149,7 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
             text = Text("\n".join(visible), overflow="fold", no_wrap=False)
             footer = message(
                 "tui.dashboard.logs.footer",
-                state=message(
-                    "tui.dashboard.logs.following"
-                    if following
-                    else "tui.dashboard.logs.paused"
-                ),
+                state=message("tui.dashboard.logs.following" if following else "tui.dashboard.logs.paused"),
                 start=offset + 1,
                 end=min(len(lines), offset + page),
                 total=len(lines),

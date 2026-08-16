@@ -108,9 +108,7 @@ def _thumbnail_url(info: dict[str, Any]) -> str | None:
         if not isinstance(url, str) or not _is_url(url):
             continue
         try:
-            area = float(candidate.get("width") or 0) * float(
-                candidate.get("height") or 0
-            )
+            area = float(candidate.get("width") or 0) * float(candidate.get("height") or 0)
         except (TypeError, ValueError):
             area = 0
         candidates.append((area, index, url))
@@ -138,9 +136,7 @@ class Extractor:
     def __init__(self, http: HttpClient) -> None:
         self.http = http
         self.catalogs = CatalogRouter(http)
-        self.executor = ProcessPoolExecutor(
-            max_workers=configured_worker_count(), initializer=_lower_worker_priority
-        )
+        self.executor = ProcessPoolExecutor(max_workers=configured_worker_count(), initializer=_lower_worker_priority)
         self.semaphore = asyncio.Semaphore(configured_worker_count())
         self.success_cache: TTLCache[str, list[dict[str, Any]]] = TTLCache(maxsize=2_000, ttl=7_200)
         self.failure_cache: TTLCache[str, str] = TTLCache(maxsize=2_000, ttl=300)
@@ -210,7 +206,7 @@ class Extractor:
             value = await attempt(None)
             if value:
                 return value
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - extractor failures are retried with available cookies
             first_error = exc
         for cookie_file in self._cookie_files(domain):
             try:
@@ -218,7 +214,7 @@ class Extractor:
                 if value:
                     self._last_cookie_by_domain[domain] = cookie_file
                     return value
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - each cookie candidate may fail independently
                 first_error = first_error or exc
         if first_error:
             raise ResolveError(str(first_error)) from first_error
@@ -233,16 +229,10 @@ class Extractor:
         raw_stream = str(info.get("url") or "")
         stream_url = raw_stream if _is_url(raw_stream) and raw_stream != webpage_url else None
         return Track(
-            title=str(
-                info.get("title") or info.get("id") or message("track.unknown_title")
-            ),
+            title=str(info.get("title") or info.get("id") or message("track.unknown_title")),
             webpage_url=str(webpage_url),
             source=extractor,
-            uploader=str(
-                info.get("uploader")
-                or info.get("artist")
-                or message("track.unknown_artist")
-            ),
+            uploader=str(info.get("uploader") or info.get("artist") or message("track.unknown_artist")),
             duration=float(info["duration"]) if info.get("duration") is not None else None,
             is_live=bool(info.get("is_live") or info.get("live_status") == "is_live"),
             thumbnail=_thumbnail_url(info),
@@ -358,9 +348,7 @@ class Extractor:
                     error = str(exc)
                     break
             return tracks, error
-        return await self.resolve_one(
-            request, requested_by=requested_by, provenance=provenance
-        ), None
+        return await self.resolve_one(request, requested_by=requested_by, provenance=provenance), None
 
     async def search(self, query: str, limit: int = 10) -> list[Track]:
         data = await self._extract(f"ytsearch{max(1, min(25, limit))}:{sanitize_query(query)}", flat=True)
@@ -386,9 +374,7 @@ class Extractor:
         parts = urlsplit(seed.webpage_url)
         host = (parts.hostname or "").lower()
         if host in {"youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be"}:
-            video_id = (
-                parts.path.strip("/") if host == "youtu.be" else parse_qs(parts.query).get("v", [None])[0]
-            )
+            video_id = parts.path.strip("/") if host == "youtu.be" else parse_qs(parts.query).get("v", [None])[0]
             if video_id:
                 primary = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
 
@@ -421,15 +407,11 @@ class Extractor:
             if "soundcloud" in seed.source:
                 soundcloud_seed = await self._extract(seed.webpage_url, flat=True)
             else:
-                soundcloud_seed = await self._extract(
-                    f"scsearch1:{seed.title} {seed.uploader}", flat=True
-                )
+                soundcloud_seed = await self._extract(f"scsearch1:{seed.title} {seed.uploader}", flat=True)
             entries = soundcloud_seed.get("entries") or [soundcloud_seed]
             first = next((entry for entry in entries if isinstance(entry, dict)), None)
             if first and first.get("id"):
-                return await collect(
-                    f"https://soundcloud.com/discover/sets/track-stations:{first['id']}"
-                )
+                return await collect(f"https://soundcloud.com/discover/sets/track-stations:{first['id']}")
         except ResolveError:
             LOGGER.info("SoundCloud recommendation fallback had no compatible seed")
         return []

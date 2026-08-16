@@ -9,10 +9,11 @@ import platform
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, NoReturn
+from typing import Any, NoReturn
 from uuid import uuid4
 
 from src.playify.constants import (
@@ -111,13 +112,16 @@ def _python_supported(executable: Path) -> bool:
             [
                 str(executable),
                 "-c",
-                "import platform,sys; raise SystemExit(0 if "
-                "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) and "
-                "platform.machine().lower() in {'amd64','x86_64'} else 1)",
+                (
+                    "import platform,sys; raise SystemExit(0 if "
+                    "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) and "
+                    "platform.machine().lower() in {'amd64','x86_64'} else 1)"
+                ),
             ],
             cwd=ROOT,
             capture_output=True,
             timeout=20,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -184,21 +188,17 @@ def _initialize_json(path: Path, defaults: Mapping[str, Any]) -> dict[str, Any]:
         try:
             candidate = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(candidate, dict):
-                raise ValueError("the JSON root must be an object")
+                raise ValueError("the JSON root must be an object")  # noqa: TRY004 - invalid JSON value shape
             loaded = candidate
             valid = True
         except (OSError, ValueError, json.JSONDecodeError):
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-            backup = path.with_name(
-                f"{path.stem}.invalid-{stamp}-{os.getpid()}.json"
-            )
+            backup = path.with_name(f"{path.stem}.invalid-{stamp}-{os.getpid()}.json")
             shutil.copy2(path, backup)
             print(
                 message(
                     "bootstrap.output",
-                    detail=message(
-                        "bootstrap.data_invalid", path=path, backup=backup
-                    ),
+                    detail=message("bootstrap.data_invalid", path=path, backup=backup),
                 )
             )
     complete = deepcopy(dict(defaults))
@@ -274,9 +274,7 @@ def _verify_owned_runtime(path: Path, metadata: Mapping[str, Any]) -> None:
         fail(message("bootstrap.runtime_ownership_invalid", path=resolved))
 
 
-def _record_runtime(
-    metadata: dict[str, Any], mode: str, path: Path, base_python: Path
-) -> dict[str, Any]:
+def _record_runtime(metadata: dict[str, Any], mode: str, path: Path, base_python: Path) -> dict[str, Any]:
     metadata.update(
         {
             "runtime_mode": mode,
@@ -302,9 +300,7 @@ def _choose_custom_runtime(active: Path) -> tuple[str, Path, bool]:
         print(
             message(
                 "bootstrap.output",
-                detail=message(
-                    "bootstrap.runtime_not_adoptable", path=VENV.resolve()
-                ),
+                detail=message("bootstrap.runtime_not_adoptable", path=VENV.resolve()),
             )
         )
         return "project", VENV.resolve(), False
@@ -318,19 +314,13 @@ def _choose_custom_runtime(active: Path) -> tuple[str, Path, bool]:
             ),
         )
     )
-    print(
-        message(
-            "bootstrap.output", detail=message("bootstrap.runtime_adoption_effect")
-        )
-    )
+    print(message("bootstrap.output", detail=message("bootstrap.runtime_adoption_effect")))
     while True:
         choice = input(message("bootstrap.runtime_choice")).strip()
         if choice == "1":
             return "project", VENV.resolve(), False
         if choice == "2":
-            confirmation = input(
-                message("bootstrap.runtime_adoption_confirm", path=active)
-            ).strip()
+            confirmation = input(message("bootstrap.runtime_adoption_confirm", path=active)).strip()
             if confirmation == "MANAGE":
                 return "adopted", active.resolve(), True
             print(
@@ -348,9 +338,7 @@ def _choose_custom_runtime(active: Path) -> tuple[str, Path, bool]:
             )
 
 
-def _base_python_for_runtime(
-    metadata: Mapping[str, Any], runtime: Path
-) -> Path:
+def _base_python_for_runtime(metadata: Mapping[str, Any], runtime: Path) -> Path:
     candidates: list[Path] = []
     recorded = metadata.get("runtime_base_python")
     if isinstance(recorded, str) and recorded:
@@ -364,9 +352,7 @@ def _base_python_for_runtime(
     fail(message("bootstrap.runtime_base_unavailable", path=runtime))
 
 
-def select_runtime(
-    metadata: dict[str, Any]
-) -> tuple[Path, Path, dict[str, Any]]:
+def select_runtime(metadata: dict[str, Any]) -> tuple[Path, Path, dict[str, Any]]:
     """Resolve the persisted ownership decision, prompting once when appropriate."""
 
     active = active_virtual_environment()
@@ -426,12 +412,15 @@ def environment_valid(path: Path) -> bool:
             [
                 str(python),
                 "-c",
-                "import sys; raise SystemExit(0 if "
-                "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) else 1)",
+                (
+                    "import sys; raise SystemExit(0 if "
+                    "sys.version_info.major == 3 and sys.version_info[:2] >= (3,11) else 1)"
+                ),
             ],
             cwd=ROOT,
             capture_output=True,
             timeout=20,
+            check=False,
         )
         if version.returncode != 0:
             return False
@@ -440,19 +429,15 @@ def environment_valid(path: Path) -> bool:
             cwd=ROOT,
             capture_output=True,
             timeout=30,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return False
     return imports.returncode == 0
 
 
-def dependency_state(
-    environment: Path, metadata: dict[str, Any]
-) -> tuple[bool, bool]:
-    mandatory = (
-        not environment_valid(environment)
-        or metadata.get("requirements_hash") != requirements_hash()
-    )
+def dependency_state(environment: Path, metadata: dict[str, Any]) -> tuple[bool, bool]:
+    mandatory = not environment_valid(environment) or metadata.get("requirements_hash") != requirements_hash()
     last = metadata.get("last_dependency_check")
     stale = True
     if last:
@@ -488,9 +473,7 @@ def _runtime_python_version(runtime: Path) -> str | None:
     return result.stdout.strip() or None
 
 
-def _record_dependency_check(
-    metadata: dict[str, Any], runtime: Path
-) -> None:
+def _record_dependency_check(metadata: dict[str, Any], runtime: Path) -> None:
     metadata.update(
         {
             "requirements_hash": requirements_hash(),
@@ -526,9 +509,7 @@ def _cleanup_temporary_runtime(
     shutil.rmtree(path)
 
 
-def stage_environment(
-    runtime: Path, base_python: Path, metadata: dict[str, Any]
-) -> None:
+def stage_environment(runtime: Path, base_python: Path, metadata: dict[str, Any]) -> None:
     """Build, validate, and atomically replace an owned virtual environment."""
 
     runtime = runtime.resolve()
@@ -650,17 +631,11 @@ def main() -> None:
     if mandatory:
         stage_environment(runtime, base_python, metadata)
     elif stale:
-        answer = input(
-            message(
-                "bootstrap.output", detail=message("bootstrap.dependencies_due")
-            )
-        ).strip().lower()
+        answer = input(message("bootstrap.output", detail=message("bootstrap.dependencies_due"))).strip().lower()
         if answer in {"", "y", "yes"}:
             stage_environment(runtime, base_python, metadata)
         else:
-            metadata["dependency_snooze_until"] = (
-                datetime.now(UTC) + timedelta(days=3)
-            ).isoformat()
+            metadata["dependency_snooze_until"] = (datetime.now(UTC) + timedelta(days=3)).isoformat()
             save_metadata(metadata)
     if not environment_valid(runtime):
         fail(message("bootstrap.environment_invalid"))

@@ -1,8 +1,7 @@
 """Playify TUI — Visual theme, colors, and style constants."""
 
-from rich.theme import Theme
 from rich.style import Style
-from rich.text import Text
+from rich.theme import Theme
 
 # ─── Brand Colors ────────────────────────────────────────────────────────────
 # Playify palette: deep blues, navy, ice accents

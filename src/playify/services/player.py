@@ -8,8 +8,6 @@ import random
 import shutil
 import time
 from collections.abc import Awaitable, Callable
-from pathlib import Path
-from typing import Any, Literal
 
 import discord
 
@@ -77,11 +75,7 @@ class PlayerSession:
 
     @property
     def position(self) -> float:
-        if (
-            self.playback_started_at is not None
-            and not self.state.paused
-            and not self.state.dormant
-        ):
+        if self.playback_started_at is not None and not self.state.paused and not self.state.dormant:
             return self.start_offset + (time.monotonic() - self.playback_started_at)
         return self.state.position
 
@@ -137,14 +131,12 @@ class PlayerSession:
 
     async def _resolve_pending(self, pending: PendingImport) -> None:
         try:
-            result: tuple[list[Track], str | None] | BaseException = (
-                await self.extractor.resolve_request(
-                    pending.query, requested_by=pending.requested_by
-                )
+            result: tuple[list[Track], str | None] | BaseException = await self.extractor.resolve_request(
+                pending.query, requested_by=pending.requested_by
             )
         except asyncio.CancelledError:
             return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - background import failures are stored as results
             result = exc
         async with self.lock:
             self.pending_results[pending.import_id] = result
@@ -262,9 +254,7 @@ class PlayerSession:
             await self.become_dormant("voice_start_failed")
             raise
 
-    async def move_to(
-        self, channel: discord.VoiceChannel | discord.StageChannel, text_channel_id: int
-    ) -> None:
+    async def move_to(self, channel: discord.VoiceChannel | discord.StageChannel, text_channel_id: int) -> None:
         try:
             await self.connect(channel, text_channel_id)
         except Exception:
@@ -336,9 +326,7 @@ class PlayerSession:
 
         def after(error: Exception | None) -> None:
             loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(
-                    self._after_track(generation, error), name=f"after-{self.guild_id}"
-                )
+                lambda: asyncio.create_task(self._after_track(generation, error), name=f"after-{self.guild_id}")
             )
 
         try:
@@ -401,11 +389,7 @@ class PlayerSession:
                     continue
             else:
                 await self.changed("track_selected")
-            if (
-                self.state.autoplay_enabled
-                and not self.state.queue
-                and not self.state.pending
-            ):
+            if self.state.autoplay_enabled and not self.state.queue and not self.state.pending:
                 self.schedule_autoplay()
             return self.state.current
         self.state.position = 0
@@ -469,9 +453,7 @@ class PlayerSession:
             if current.is_live:
                 raise ValueError(LIVE_SEEK_ERROR)
             position = float(position)
-            if not clamp and (
-                position < 0 or (current.duration is not None and position > current.duration)
-            ):
+            if not clamp and (position < 0 or (current.duration is not None and position > current.duration)):
                 raise ValueError(SEEK_RANGE_ERROR)
             upper = current.duration if current.duration is not None else max(0.0, position)
             position = max(0.0, min(position, upper))
@@ -554,9 +536,7 @@ class PlayerSession:
     async def shuffle(self) -> int:
         async with self.lock:
             original = [track.occurrence_id for track in self.state.queue]
-            while len(self.state.queue) > 1 and [
-                track.occurrence_id for track in self.state.queue
-            ] == original:
+            while len(self.state.queue) > 1 and [track.occurrence_id for track in self.state.queue] == original:
                 random.shuffle(self.state.queue)
             self.priority_anchor.clear()
             await self.changed("queue_shuffled")
@@ -611,9 +591,7 @@ class PlayerSession:
                 if self.autoplay_task:
                     self.autoplay_task.cancel()
                     self.autoplay_task = None
-                self.state.queue = [
-                    track for track in self.state.queue if track.provenance != "autoplay"
-                ]
+                self.state.queue = [track for track in self.state.queue if track.provenance != "autoplay"]
             await self.changed("autoplay")
             if enabled and self.active and self.state.current and not self.state.queue and not self.state.pending:
                 self.schedule_autoplay()
@@ -705,7 +683,7 @@ class PlayerSession:
                     try:
                         await self.connect(channel, self.state.text_channel_id or channel.id)
                         return
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 - voice recovery must continue retrying
                         pass
                 delay = min(15.0, delay * 2)
             await self.become_dormant("voice_recovery_failed")
@@ -731,9 +709,7 @@ class PlayerManager:
         for guild_id, state in (await self.storage.load_players()).items():
             state.dormant = True
             state.paused = True
-            session = PlayerSession(
-                self.bot, self.storage, self.extractor, state, self.on_change
-            )
+            session = PlayerSession(self.bot, self.storage, self.extractor, state, self.on_change)
             self.sessions[guild_id] = session
             session.start_pending_imports()
 
@@ -758,12 +734,7 @@ class PlayerManager:
             guild = channel.guild
             member = guild.me
             permissions = channel.permissions_for(member) if member else None
-            if (
-                _human_count(channel) > 0
-                and permissions
-                and permissions.connect
-                and permissions.speak
-            ):
+            if _human_count(channel) > 0 and permissions and permissions.connect and permissions.speak:
                 try:
                     await session.connect(
                         channel,

@@ -8,10 +8,11 @@ import logging
 import os
 import random
 import socket
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Iterable
+from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 import aiohttp
@@ -21,9 +22,7 @@ from ..constants import HTTP_USER_AGENT
 
 LOGGER = logging.getLogger(__name__)
 
-CHROME_STABLE_VERSION_URL = (
-    "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE"
-)
+CHROME_STABLE_VERSION_URL = "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE"
 FALLBACK_CHROME_MAJOR = 151
 CHROME_VERSION_TIMEOUT_SECONDS = 5
 
@@ -49,14 +48,16 @@ async def current_browser_user_agent() -> str:
     chrome_major = cached_chrome_major()
     try:
         timeout = aiohttp.ClientTimeout(total=CHROME_VERSION_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(
-            timeout=timeout,
-            headers={"User-Agent": HTTP_USER_AGENT},
-            raise_for_status=True,
-            trust_env=False,
-        ) as session:
-            async with session.get(CHROME_STABLE_VERSION_URL) as response:
-                version = (await response.text()).strip()
+        async with (
+            aiohttp.ClientSession(
+                timeout=timeout,
+                headers={"User-Agent": HTTP_USER_AGENT},
+                raise_for_status=True,
+                trust_env=False,
+            ) as session,
+            session.get(CHROME_STABLE_VERSION_URL) as response,
+        ):
+            version = (await response.text()).strip()
         parts = version.split(".")
         if len(parts) != 4 or not all(part.isdigit() for part in parts):
             raise ValueError(f"invalid Chrome version: {version!r}")
@@ -166,9 +167,7 @@ async def validate_url(
         raise UnsafeUrlError("URL has no hostname")
 
     hostname = parts.hostname.lower().rstrip(".")
-    hosts, networks = _allow_entries(
-        allowlist if allowlist is not None else Config.get("private_media_allowlist", [])
-    )
+    hosts, networks = _allow_entries(allowlist if allowlist is not None else Config.get("private_media_allowlist", []))
     host_allowlisted = hostname in hosts
     try:
         addresses = (ipaddress.ip_address(hostname),)
@@ -183,9 +182,7 @@ async def validate_url(
             )
         except OSError as exc:
             raise UnsafeUrlError(f"hostname could not be resolved: {hostname}") from exc
-        addresses = tuple(
-            dict.fromkeys(ipaddress.ip_address(record[4][0]) for record in records)
-        )
+        addresses = tuple(dict.fromkeys(ipaddress.ip_address(record[4][0]) for record in records))
     if not addresses:
         raise UnsafeUrlError("hostname resolved to no addresses")
     rejected = [
@@ -194,9 +191,7 @@ async def validate_url(
         if not _address_allowed(address, host_allowlisted=host_allowlisted, networks=networks)
     ]
     if rejected:
-        raise UnsafeUrlError(
-            "hostname resolves to a blocked address: " + ", ".join(map(str, rejected))
-        )
+        raise UnsafeUrlError("hostname resolves to a blocked address: " + ", ".join(map(str, rejected)))
     return hostname, addresses
 
 
@@ -281,25 +276,27 @@ class HttpClient:
                 while True:
                     if validate:
                         await validate_url(current)
-                    async with self.semaphore:
-                        async with self.session.request(
+                    async with (
+                        self.semaphore,
+                        self.session.request(
                             method,
                             current,
                             headers=headers,
                             data=data,
                             json=json_data,
                             allow_redirects=False,
-                        ) as response:
-                            body = await response.content.read(MAX_RESPONSE_BYTES + 1)
-                            if len(body) > MAX_RESPONSE_BYTES:
-                                raise HttpStatusError(
-                                    response.status,
-                                    str(response.url),
-                                    "response exceeded 16 MiB",
-                                )
-                            response_headers = {key: value for key, value in response.headers.items()}
-                            status = response.status
-                            final_url = str(response.url)
+                        ) as response,
+                    ):
+                        body = await response.content.read(MAX_RESPONSE_BYTES + 1)
+                        if len(body) > MAX_RESPONSE_BYTES:
+                            raise HttpStatusError(
+                                response.status,
+                                str(response.url),
+                                "response exceeded 16 MiB",
+                            )
+                        response_headers = {key: value for key, value in response.headers.items()}
+                        status = response.status
+                        final_url = str(response.url)
 
                     if status in {301, 302, 303, 307, 308}:
                         location = response_headers.get("Location")

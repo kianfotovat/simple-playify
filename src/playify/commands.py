@@ -56,7 +56,9 @@ def is_manager(interaction: discord.Interaction) -> bool:
 
 
 def voice_chat(interaction: discord.Interaction) -> VoiceChat | None:
-    return interaction.channel if isinstance(interaction.channel, (discord.VoiceChannel, discord.StageChannel)) else None
+    return (
+        interaction.channel if isinstance(interaction.channel, (discord.VoiceChannel, discord.StageChannel)) else None
+    )
 
 
 def parse_timestamp(value: str) -> float:
@@ -69,7 +71,7 @@ def parse_timestamp(value: str) -> float:
         raise ValueError("format") from exc
     if any(number < 0 for number in numbers) or any(number >= 60 for number in numbers[1:]):
         raise ValueError("format")
-    return float(sum(number * (60 ** index) for index, number in enumerate(reversed(numbers))))
+    return float(sum(number * (60**index) for index, number in enumerate(reversed(numbers))))
 
 
 class CommandSuite:
@@ -121,32 +123,26 @@ class CommandSuite:
             description=message("command.description.allowlist"),
             parent=setup,
         )
-        allowlist.command(
-            name="set", description=message("command.description.allowlist_set")
-        )(self.allowlist_set)
-        allowlist.command(
-            name="add", description=message("command.description.allowlist_add")
-        )(self.allowlist_add)
-        allowlist.command(
-            name="remove", description=message("command.description.allowlist_remove")
-        )(self.allowlist_remove)
-        allowlist.command(
-            name="clear", description=message("command.description.allowlist_clear")
-        )(self.allowlist_clear)
-        allowlist.command(
-            name="show", description=message("command.description.allowlist_show")
-        )(self.allowlist_show)
+        allowlist.command(name="set", description=message("command.description.allowlist_set"))(self.allowlist_set)
+        allowlist.command(name="add", description=message("command.description.allowlist_add"))(self.allowlist_add)
+        allowlist.command(name="remove", description=message("command.description.allowlist_remove"))(
+            self.allowlist_remove
+        )
+        allowlist.command(name="clear", description=message("command.description.allowlist_clear"))(
+            self.allowlist_clear
+        )
+        allowlist.command(name="show", description=message("command.description.allowlist_show"))(self.allowlist_show)
         channelmove = app_commands.Group(
             name="channelmove",
             description=message("command.description.channelmove"),
             parent=setup,
         )
-        channelmove.command(
-            name="show", description=message("command.description.channelmove_show")
-        )(self.channelmove_show)
-        channelmove.command(
-            name="set", description=message("command.description.channelmove_set")
-        )(self.channelmove_set)
+        channelmove.command(name="show", description=message("command.description.channelmove_show"))(
+            self.channelmove_show
+        )
+        channelmove.command(name="set", description=message("command.description.channelmove_set"))(
+            self.channelmove_set
+        )
         app_commands.guild_only()(setup)
         if hasattr(app_commands, "allowed_installs"):
             app_commands.allowed_installs(guilds=True, users=False)(setup)
@@ -194,9 +190,7 @@ class CommandSuite:
             if existing is None or existing.state.dormant:
                 return True
         if base in MUTATIONS and voice_chat(interaction) is None:
-            await self.app.responses.send(
-                interaction, message("command.voice_chat_only"), lifetime="error"
-            )
+            await self.app.responses.send(interaction, message("command.voice_chat_only"), lifetime="error")
             return False
         existing = self.app.players.sessions.get(interaction.guild.id)
         target = voice_chat(interaction)
@@ -207,9 +201,7 @@ class CommandSuite:
             and target is not None
             and _human_count(target) == 0
         ):
-            await self.app.responses.send(
-                interaction, message("voice.empty"), lifetime="error"
-            )
+            await self.app.responses.send(interaction, message("voice.empty"), lifetime="error")
             return False
         return True
 
@@ -239,14 +231,12 @@ class CommandSuite:
             return True
         settings = self.server(interaction.guild_id)
         source = session.voice.channel
-        if (
+        return not (
             settings.channel_move_mode == "protect"
             and isinstance(source, (discord.VoiceChannel, discord.StageChannel))
             and _human_count(source) > 0
             and not is_manager(interaction)
-        ):
-            return False
-        return True
+        )
 
     async def _connect_fresh(
         self, interaction: discord.Interaction, session: PlayerSession, *, resume: bool
@@ -272,13 +262,9 @@ class CommandSuite:
         target = voice_chat(interaction)
         if target is None:
             return
-        progress = await self.app.responses.progress(
-            interaction, message("progress.resolving")
-        )
+        progress = await self.app.responses.progress(interaction, message("progress.resolving"))
         if _human_count(target) == 0:
-            await self.app.responses.finish_progress(
-                progress, message("voice.empty"), failed=True
-            )
+            await self.app.responses.finish_progress(progress, message("voice.empty"), failed=True)
             return
         dormant_play = session.state.dormant and play_semantics
         try:
@@ -303,7 +289,7 @@ class CommandSuite:
                 if await self._move_allowed(interaction, session, target):
                     try:
                         await session.move_to(target, interaction.channel_id)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - a failed voice move is reported without aborting the request
                         move_failed = True
                 else:
                     move_failed = True
@@ -311,9 +297,7 @@ class CommandSuite:
             if dormant_play and count and session.state.dormant:
                 await session.connect(target, interaction.channel_id, resume=True)
             if not count:
-                await self.app.responses.finish_progress(
-                    progress, message("player.not_found"), failed=True
-                )
+                await self.app.responses.finish_progress(progress, message("player.not_found"), failed=True)
                 return
             text = message("player.import_complete", count=count)
             if error:
@@ -322,14 +306,10 @@ class CommandSuite:
                 text += " " + message("player.move_failed")
             await self.app.responses.finish_progress(progress, text, failed=move_failed)
         except ValueError:
-            await self.app.responses.finish_progress(
-                progress, message("player.request_failed"), failed=True
-            )
-        except Exception as exc:
-            await self.app.responses.finish_progress(
-                progress, message("player.request_failed"), failed=True
-            )
-            LOGGER.exception("Track import failed: %s", exc)
+            await self.app.responses.finish_progress(progress, message("player.request_failed"), failed=True)
+        except Exception:
+            await self.app.responses.finish_progress(progress, message("player.request_failed"), failed=True)
+            LOGGER.exception("Track import failed")
 
     async def _wake(self, interaction: discord.Interaction, session: PlayerSession) -> None:
         if session.state.dormant:
@@ -342,9 +322,7 @@ class CommandSuite:
         await self._enqueue(interaction, query, priority=True, play_semantics=False)
 
     async def search(self, interaction: discord.Interaction, query: str) -> None:
-        progress = await self.app.responses.progress(
-            interaction, message("progress.searching")
-        )
+        progress = await self.app.responses.progress(interaction, message("progress.searching"))
         target = voice_chat(interaction)
         if target is None or _human_count(target) == 0:
             await self.app.responses.finish_progress(progress, message("voice.empty"), failed=True)
@@ -352,9 +330,7 @@ class CommandSuite:
         try:
             tracks = await self.app.extractor.search(query, 10)
             if not tracks:
-                await self.app.responses.finish_progress(
-                    progress, message("player.search_empty"), failed=True
-                )
+                await self.app.responses.finish_progress(progress, message("player.search_empty"), failed=True)
                 return
 
             async def picked(selection: discord.Interaction, track: Track) -> None:
@@ -381,7 +357,7 @@ class CommandSuite:
                         if await self._move_allowed(selection, session, target):
                             try:
                                 await session.move_to(target, selection.channel_id)
-                            except Exception:
+                            except Exception:  # noqa: BLE001 - a failed voice move is reported without aborting the request
                                 move_failed = True
                         else:
                             move_failed = True
@@ -393,16 +369,12 @@ class CommandSuite:
                 )
 
             view = SearchView(tracks, picked, self.app.responses)
-            await progress.edit(
-                content=None, embed=None, attachments=[], view=view
-            )
+            await progress.edit(content=None, embed=None, attachments=[], view=view)
             view.message = progress
             await self.app.responses.expire(progress, "interactive")
-        except Exception as exc:
-            LOGGER.exception("Search failed: %s", exc)
-            await self.app.responses.finish_progress(
-                progress, message("player.search_failed"), failed=True
-            )
+        except Exception:
+            LOGGER.exception("Search failed")
+            await self.app.responses.finish_progress(progress, message("player.search_failed"), failed=True)
 
     async def pause(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
@@ -452,26 +424,20 @@ class CommandSuite:
         session = self.session(interaction.guild_id)
         await self._wake(interaction, session)
         if not session.state.current:
-            await self.app.responses.send(
-                interaction, message("player.nothing_playing"), lifetime="success"
-            )
+            await self.app.responses.send(interaction, message("player.nothing_playing"), lifetime="success")
             return
         if timestamp is None:
             if session.state.current.is_live:
                 await self.app.responses.send(interaction, message("player.live_seek"), lifetime="error")
                 return
             view = SeekView(session, self.app.responses)
-            sent = await self.app.responses.send(
-                interaction, embed=view.embed(), view=view, lifetime="interactive"
-            )
+            sent = await self.app.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
             view.message = sent
             view.start_ticker()
             return
         try:
             position = await session.seek(parse_timestamp(timestamp), clamp=False)
-            await self.app.responses.send(
-                interaction, message("player.seeked", position=format_time(position))
-            )
+            await self.app.responses.send(interaction, message("player.seeked", position=format_time(position)))
         except ValueError as exc:
             key = {
                 "format": "player.seek_format",
@@ -490,9 +456,7 @@ class CommandSuite:
         track = await session.skip()
         await self.app.responses.send(
             interaction,
-            message("player.playing", title=safe_text(track.title))
-            if track
-            else message("player.queue_empty"),
+            message("player.playing", title=safe_text(track.title)) if track else message("player.queue_empty"),
         )
 
     async def previous(self, interaction: discord.Interaction) -> None:
@@ -501,9 +465,7 @@ class CommandSuite:
         track = await session.previous()
         await self.app.responses.send(
             interaction,
-            message("player.playing", title=safe_text(track.title))
-            if track
-            else message("player.history_empty"),
+            message("player.playing", title=safe_text(track.title)) if track else message("player.history_empty"),
             lifetime="success" if track else "error",
         )
 
@@ -514,9 +476,7 @@ class CommandSuite:
     async def reconnect(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
         if not session.state.dormant:
-            await self.app.responses.send(
-                interaction, message("player.not_dormant"), lifetime="error"
-            )
+            await self.app.responses.send(interaction, message("player.not_dormant"), lifetime="error")
             return
         await self._connect_fresh(interaction, session, resume=False)
         await self.app.responses.send(interaction, message("player.reconnected"))
@@ -524,35 +484,27 @@ class CommandSuite:
     async def queue(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
         view = self.app.controllers.queue_view(session)
-        sent = await self.app.responses.send(
-            interaction, embed=view.embed(), view=view, lifetime="interactive"
-        )
+        sent = await self.app.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
         view.message = sent
 
     async def remove(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
         view = self.app.controllers.queue_view(session, action="remove")
-        sent = await self.app.responses.send(
-            interaction, embed=view.embed(), view=view, lifetime="interactive"
-        )
+        sent = await self.app.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
         view.message = sent
 
     async def jumpto(self, interaction: discord.Interaction) -> None:
         session = self.session(interaction.guild_id)
         await self._wake(interaction, session)
         view = self.app.controllers.queue_view(session, action="jump")
-        sent = await self.app.responses.send(
-            interaction, embed=view.embed(), view=view, lifetime="interactive"
-        )
+        sent = await self.app.responses.send(interaction, embed=view.embed(), view=view, lifetime="interactive")
         view.message = sent
 
     async def clearqueue(self, interaction: discord.Interaction) -> None:
         count = await self.session(interaction.guild_id).clear_queue()
         await self.app.responses.send(
             interaction,
-            message("player.queue_cleared", count=count)
-            if count
-            else message("player.queue_already_empty"),
+            message("player.queue_cleared", count=count) if count else message("player.queue_already_empty"),
         )
 
     async def shuffle(self, interaction: discord.Interaction) -> None:
@@ -570,21 +522,15 @@ class CommandSuite:
                 ),
             )
         except ValueError:
-            await self.app.responses.send(
-                interaction, message("player.nothing_playing"), lifetime="success"
-            )
+            await self.app.responses.send(interaction, message("player.nothing_playing"), lifetime="success")
 
     async def autoplay(self, interaction: discord.Interaction, query: str | None = None) -> None:
         session = self.session(interaction.guild_id)
         if query:
-            progress = await self.app.responses.progress(
-                interaction, message("progress.autoplay")
-            )
+            progress = await self.app.responses.progress(interaction, message("progress.autoplay"))
             target = voice_chat(interaction)
             if target is None or _human_count(target) == 0:
-                await self.app.responses.finish_progress(
-                    progress, message("voice.empty"), failed=True
-                )
+                await self.app.responses.finish_progress(progress, message("voice.empty"), failed=True)
                 return
             try:
                 if not session.active:
@@ -592,19 +538,15 @@ class CommandSuite:
                     await self._connect_fresh(interaction, session, resume=True)
                 elif session.voice and session.voice.channel.id != target.id:
                     if not await self._move_allowed(interaction, session, target):
-                        await self.app.responses.finish_progress(
-                            progress, message("player.move_failed"), failed=True
-                        )
+                        await self.app.responses.finish_progress(progress, message("player.move_failed"), failed=True)
                         return
                     await session.move_to(target, interaction.channel_id)
                 await session.autoplay_query(query, interaction.user.id)
                 await self.app.responses.finish_progress(progress, message("autoplay.enabled"))
-            except Exception as exc:
-                LOGGER.exception("Autoplay seed failed: %s", exc)
+            except Exception:
+                LOGGER.exception("Autoplay seed failed")
                 await session.set_autoplay(True)
-                await self.app.responses.finish_progress(
-                    progress, message("autoplay.failed"), failed=True
-                )
+                await self.app.responses.finish_progress(progress, message("autoplay.failed"), failed=True)
             return
         enabled = await session.set_autoplay(not session.state.autoplay_enabled)
         if enabled and session.state.current is None:
@@ -616,9 +558,7 @@ class CommandSuite:
     async def volume(self, interaction: discord.Interaction, value: app_commands.Range[int, 0, 200]) -> None:
         session = self.session(interaction.guild_id)
         if not (session.state.current or session.state.queue or session.state.dormant):
-            await self.app.responses.send(
-                interaction, message("player.no_session"), lifetime="error"
-            )
+            await self.app.responses.send(interaction, message("player.no_session"), lifetime="error")
             return
         volume = await session.set_volume(value)
         await self.app.responses.send(interaction, message("player.volume", volume=volume))
@@ -629,9 +569,7 @@ class CommandSuite:
             await self.app.responses.send(interaction, message("player.empty"))
             return
         if not session.active:
-            await self.app.responses.send(
-                interaction, message("voice.dormant"), lifetime="success"
-            )
+            await self.app.responses.send(interaction, message("voice.dormant"), lifetime="success")
             return
         await interaction.response.defer()
         await self.app.controllers.recreate(session)
@@ -766,9 +704,7 @@ class CommandSuite:
         mode = self.server(interaction.guild_id).channel_move_mode
         await self.app.responses.send(interaction, message("setup.channelmove", mode=mode))
 
-    async def channelmove_set(
-        self, interaction: discord.Interaction, mode: Literal["allow", "protect"]
-    ) -> None:
+    async def channelmove_set(self, interaction: discord.Interaction, mode: Literal["allow", "protect"]) -> None:
         settings = self.server(interaction.guild_id)
         settings.channel_move_mode = mode
         await self.app.storage.save_server(settings)

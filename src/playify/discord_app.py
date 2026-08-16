@@ -36,9 +36,7 @@ class PlayifyCommandTree(app_commands.CommandTree):
         suite = getattr(self.client, "commands", None)
         return await suite.interaction_check(interaction) if suite else False
 
-    async def on_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ) -> None:
+    async def on_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         await self.client.handle_command_error(interaction, error)  # type: ignore[attr-defined]
 
 
@@ -56,12 +54,8 @@ class PlayifyClient(discord.Client):
         self.extractor = Extractor(self.media_http)
         self.server_settings: dict[int, ServerSettings] = {}
         self.responses = Responses(self, self.storage)
-        self.players = PlayerManager(
-            self, self.storage, self.extractor, self._player_changed
-        )
-        self.controllers = ControllerManager(
-            self, self.players, self.storage, self.responses
-        )
+        self.players = PlayerManager(self, self.storage, self.extractor, self._player_changed)
+        self.controllers = ControllerManager(self, self.players, self.storage, self.responses)
         self.commands = CommandSuite(self)
         self.started_at = time.monotonic()
         self.ready_task: asyncio.Task[None] | None = None
@@ -77,9 +71,7 @@ class PlayifyClient(discord.Client):
         control_id = os.getenv("PLAYIFY_CONTROL_ID", "").strip().lower()
         if len(control_id) == 32 and all(character in "0123456789abcdef" for character in control_id):
             control_path = TEMP_DIR / f"control-{control_id}.stop"
-            self.control_task = asyncio.create_task(
-                self._watch_control_file(control_path), name="supervisor-control"
-            )
+            self.control_task = asyncio.create_task(self._watch_control_file(control_path), name="supervisor-control")
 
     async def on_ready(self) -> None:
         if self.ready_task is None:
@@ -194,18 +186,14 @@ class PlayifyClient(discord.Client):
         finally:
             path.unlink(missing_ok=True)
 
-    async def handle_command_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ) -> None:
+    async def handle_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.CommandInvokeError):
             original = error.original
         else:
             original = error
         if isinstance(original, (discord.NotFound, app_commands.CheckFailure)):
             if not interaction.response.is_done():
-                await self.responses.send(
-                    interaction, message("command.expired"), lifetime="error"
-                )
+                await self.responses.send(interaction, message("command.expired"), lifetime="error")
             return
         if isinstance(original, ValueError):
             LOGGER.warning("Rejected command input: %s", original)

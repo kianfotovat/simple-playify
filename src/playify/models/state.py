@@ -82,7 +82,7 @@ class Track:
         return value
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "Track":
+    def from_dict(cls, value: dict[str, Any]) -> Track:
         allowed = cls.__dataclass_fields__.keys()
         return cls(**{key: value[key] for key in allowed if key in value})
 
@@ -103,7 +103,7 @@ class PendingImport:
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "PendingImport":
+    def from_dict(cls, value: dict[str, Any]) -> PendingImport:
         return cls(
             query=str(value.get("query", "")),
             priority=bool(value.get("priority", False)),

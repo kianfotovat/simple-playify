@@ -21,7 +21,7 @@ from src.playify.messages import message
 from .bot_process import BotProcess
 from .dashboard import run_dashboard
 from .key_input import wait_for_key
-from .maintenance import locate_ffmpeg, managed_ffmpeg_due, install_ffmpeg, run_maintenance
+from .maintenance import install_ffmpeg, locate_ffmpeg, managed_ffmpeg_due, run_maintenance
 from .settings import run_settings
 from .theme import PLAYIFY_THEME
 from .wizard import load_env, run_wizard
@@ -67,9 +67,7 @@ def _start_bot(console: Console, bot: BotProcess) -> str:
         state = bot.wait_for_startup(30)
         if state != "timeout":
             return state
-        if not Confirm.ask(
-            message("tui.main.start_pending"), default=True
-        ):
+        if not Confirm.ask(message("tui.main.start_pending"), default=True):
             _stop_with_choice(console, bot)
             return "stopped"
 
@@ -81,17 +79,13 @@ def _perform_update(console: Console, status, action: str) -> None:
     success, detail = operation(PROJECT_ROOT, status)
     result = (
         message(
-            "tui.main.update.rolled_back"
-            if action == "rollback"
-            else "tui.main.update.updated",
+            "tui.main.update.rolled_back" if action == "rollback" else "tui.main.update.updated",
             revision=detail,
         )
         if success
         else message("tui.main.update.failed", detail=detail)
     )
-    console.print(
-        f"[{'success' if success else 'error'}]{result}[/]"
-    )
+    console.print(f"[{'success' if success else 'error'}]{result}[/]")
     wait_for_key(console, message("tui.key.restart_launcher"))
     raise SystemExit(0 if success else 1)
 
@@ -122,9 +116,7 @@ def main() -> None:
     ffmpeg, source = locate_ffmpeg()
     if ffmpeg is None:
         console.print(message("tui.main.ffmpeg_missing"))
-        if not Confirm.ask(
-            message("tui.main.ffmpeg_install"), default=True
-        ) or not install_ffmpeg(console):
+        if not Confirm.ask(message("tui.main.ffmpeg_install"), default=True) or not install_ffmpeg(console):
             raise SystemExit(1)
     elif source == "managed" and managed_ffmpeg_due():
         console.print(message("tui.main.ffmpeg_due"))

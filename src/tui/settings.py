@@ -89,9 +89,7 @@ def run_settings(console: Console) -> str | None:
         console.clear()
         console.print(table)
         if restart_required:
-            console.print(
-                message("tui.settings.restart_required", scope=restart_required)
-            )
+            console.print(message("tui.settings.restart_required", scope=restart_required))
         selection = Prompt.ask(message("tui.settings.select"), default="esc").lower()
         if selection in {"esc", "q", "back"}:
             return restart_required

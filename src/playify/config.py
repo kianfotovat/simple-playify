@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
 
 from .constants import INSTALLATION_PATH, SETTINGS_PATH
 from .messages import message
@@ -40,7 +41,7 @@ class JsonStore:
             with self.path.open("r", encoding="utf-8") as handle:
                 loaded = json.load(handle)
             if not isinstance(loaded, dict):
-                raise ValueError("the JSON root must be an object")
+                raise ValueError("the JSON root must be an object")  # noqa: TRY004 - invalid JSON value shape
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise RuntimeError(message("config.unavailable", path=self.path)) from exc
         return loaded
@@ -88,9 +89,7 @@ class SettingsManager(JsonStore):
         if not isinstance(country, str) or len(country) != 2 or not country.isalpha():
             errors.append("tidal_country must be a two-letter country code")
         private_hosts = self.get("private_media_allowlist")
-        if not isinstance(private_hosts, list) or not all(
-            isinstance(item, str) for item in private_hosts
-        ):
+        if not isinstance(private_hosts, list) or not all(isinstance(item, str) for item in private_hosts):
             errors.append("private_media_allowlist must be a list of hosts, IPs, or CIDRs")
         clients = self.get("youtube_clients")
         if not isinstance(clients, list) or not all(isinstance(item, str) for item in clients):

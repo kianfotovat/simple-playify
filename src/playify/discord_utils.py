@@ -169,9 +169,7 @@ class Responses:
         if seconds is None:
             return
         delete_after = datetime.now(UTC) + timedelta(seconds=seconds)
-        await self.storage.add_deletion_job(
-            sent.channel.id, sent.id, delete_after, lifetime
-        )
+        await self.storage.add_deletion_job(sent.channel.id, sent.id, delete_after, lifetime)
         self._spawn_deletion(sent.channel.id, sent.id, delete_after, lifetime)
 
     async def cancel_expiration(self, sent: discord.Message) -> None:
@@ -184,9 +182,7 @@ class Responses:
             await asyncio.gather(task, return_exceptions=True)
         await self.storage.remove_deletion_job(*key)
 
-    def _spawn_deletion(
-        self, channel_id: int, message_id: int, delete_after: datetime, kind: str
-    ) -> None:
+    def _spawn_deletion(self, channel_id: int, message_id: int, delete_after: datetime, kind: str) -> None:
         key = (channel_id, message_id)
         existing = self.tasks.pop(key, None)
         if existing:

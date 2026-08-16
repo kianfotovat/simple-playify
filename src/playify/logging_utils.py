@@ -15,9 +15,7 @@ from .constants import LOG_DIR, ensure_runtime_dirs
 
 _DISCORD_TOKEN = re.compile(r"(?i)\b[MN][A-Za-z\d_-]{20,}\.[A-Za-z\d_-]{6,}\.[A-Za-z\d_-]{20,}\b")
 _AUTH_HEADER = re.compile(r"(?i)(authorization\s*[:=]\s*)([^\s,;]+)")
-_KEY_VALUE_SECRET = re.compile(
-    r"(?i)(token|secret|password|cookie|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)"
-)
+_KEY_VALUE_SECRET = re.compile(r"(?i)(token|secret|password|cookie|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)")
 _URL = re.compile(r"https?://[^\s<>]+")
 
 
@@ -73,7 +71,7 @@ class JsonStdoutHandler(logging.Handler):
             sys.stdout.flush()
         except (OSError, ValueError):
             self.available = False
-        except Exception:
+        except Exception:  # noqa: BLE001 - logging failures must not escape the handler
             self.handleError(record)
 
 
@@ -88,9 +86,7 @@ class MemoryLogHandler(logging.Handler):
 
 def configure_logging(*, bot_process: bool = False) -> MemoryLogHandler:
     ensure_runtime_dirs()
-    formatter = RedactingFormatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"
-    )
+    formatter = RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S")
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.handlers.clear()

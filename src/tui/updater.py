@@ -23,9 +23,7 @@ from src.playify.messages import message
 CANONICAL_ORIGIN = "https://github.com/kianfotovat/simple-playify.git"
 CHECK_TIMEOUT = 10
 SHA = re.compile(r"^[0-9a-f]{40}$")
-Relation = Literal[
-    "up_to_date", "behind", "ahead", "diverged", "missing_main", "non_git", "error"
-]
+Relation = Literal["up_to_date", "behind", "ahead", "diverged", "missing_main", "non_git", "error"]
 UpdateAction = Literal["install", "rollback", "skip"]
 
 
@@ -68,6 +66,7 @@ def _git(
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            check=False,
         )
     except FileNotFoundError as exc:
         raise UpdateError(message("tui.update.git_missing")) from exc
@@ -80,11 +79,7 @@ def _git(
             )
         ) from exc
     if check and result.returncode != 0:
-        detail = (
-            result.stderr
-            or result.stdout
-            or message("tui.update.git_failed")
-        ).strip()
+        detail = (result.stderr or result.stdout or message("tui.update.git_failed")).strip()
         raise UpdateError(detail[-500:])
     return result
 
@@ -92,9 +87,7 @@ def _git(
 def _revision(root: Path, reference: str) -> str:
     revision = _git(root, "rev-parse", "--verify", reference).stdout.strip().lower()
     if not SHA.fullmatch(revision):
-        raise UpdateError(
-            message("tui.update.invalid_revision", reference=reference)
-        )
+        raise UpdateError(message("tui.update.invalid_revision", reference=reference))
     return revision
 
 
@@ -118,19 +111,13 @@ def _nul_paths(result: subprocess.CompletedProcess[str]) -> set[str]:
 
 
 def _local_untracked_and_ignored(root: Path) -> set[str]:
-    untracked = _nul_paths(
-        _git(root, "ls-files", "--others", "--exclude-standard", "-z")
-    )
-    ignored = _nul_paths(
-        _git(root, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
-    )
+    untracked = _nul_paths(_git(root, "ls-files", "--others", "--exclude-standard", "-z"))
+    ignored = _nul_paths(_git(root, "ls-files", "--others", "--ignored", "--exclude-standard", "-z"))
     return untracked | ignored
 
 
 def _target_paths(root: Path, revision: str) -> set[str]:
-    return _nul_paths(
-        _git(root, "ls-tree", "-r", "--name-only", "-z", revision)
-    )
+    return _nul_paths(_git(root, "ls-tree", "-r", "--name-only", "-z", revision))
 
 
 def _path_conflicts(root: Path, revisions: set[str]) -> tuple[str, ...]:
@@ -142,9 +129,7 @@ def _path_conflicts(root: Path, revisions: set[str]) -> tuple[str, ...]:
         item
         for item in local
         if any(
-            item == target
-            or item.startswith(target.rstrip("/") + "/")
-            or target.startswith(item.rstrip("/") + "/")
+            item == target or item.startswith(target.rstrip("/") + "/") or target.startswith(item.rstrip("/") + "/")
             for target in targets
         )
     }
@@ -154,12 +139,8 @@ def _path_conflicts(root: Path, revisions: set[str]) -> tuple[str, ...]:
 def _relation(root: Path, local: str, remote: str) -> Relation:
     if local == remote:
         return "up_to_date"
-    local_is_ancestor = _git(
-        root, "merge-base", "--is-ancestor", local, remote, check=False
-    ).returncode
-    remote_is_ancestor = _git(
-        root, "merge-base", "--is-ancestor", remote, local, check=False
-    ).returncode
+    local_is_ancestor = _git(root, "merge-base", "--is-ancestor", local, remote, check=False).returncode
+    remote_is_ancestor = _git(root, "merge-base", "--is-ancestor", remote, local, check=False).returncode
     if local_is_ancestor == 0:
         return "behind"
     if remote_is_ancestor == 0:
@@ -223,11 +204,10 @@ def inspect_update(project_root: Path, *, manual: bool = False) -> UpdateStatus:
         relation = _relation(root, main, target)
         commit_message = _git(root, "log", "-1", "--format=%s", target).stdout.strip()
         rollback = Installation.get("previous_update_sha")
-        if not isinstance(rollback, str) or not SHA.fullmatch(rollback):
-            rollback = None
-        elif (
-            _git(root, "cat-file", "-e", f"{rollback}^{{commit}}", check=False).returncode
-            != 0
+        if (
+            not isinstance(rollback, str)
+            or not SHA.fullmatch(rollback)
+            or (_git(root, "cat-file", "-e", f"{rollback}^{{commit}}", check=False).returncode != 0)
         ):
             rollback = None
 
@@ -308,9 +288,7 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
 
     if status.error:
         if status.manual:
-            console.print(
-                message("tui.update.check_skipped", error=escape(status.error))
-            )
+            console.print(message("tui.update.check_skipped", error=escape(status.error)))
         return "skip"
     if status.suppressed_reason:
         return "skip"
@@ -320,9 +298,7 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
         return "skip"
     if status.relation == "up_to_date":
         if status.manual:
-            console.print(
-                message("tui.update.current", revision=status.main_sha[:7])
-            )
+            console.print(message("tui.update.current", revision=status.main_sha[:7]))
         if status.manual and status.rollback_sha and status.rollback_sha != status.main_sha:
             choice = Prompt.ask(
                 message("tui.update.choose_action"),
@@ -341,36 +317,23 @@ def choose_update(console: Console, status: UpdateStatus) -> UpdateAction:
                 "tui.update.available",
                 local=status.main_sha[:7],
                 available=status.target_sha[:7],
-                summary=escape(
-                    status.commit_message or message("tui.update.no_summary")
-                ),
+                summary=escape(status.commit_message or message("tui.update.no_summary")),
             ),
             border_style="blue",
         )
     )
     choices = ["install", "3d", "ignore", "skip"]
-    if (
-        status.rollback_sha
-        and status.rollback_sha not in {status.main_sha, status.target_sha}
-    ):
+    if status.rollback_sha and status.rollback_sha not in {status.main_sha, status.target_sha}:
         choices.insert(1, "rollback")
-    choice = Prompt.ask(
-        message("tui.update.action"), choices=choices, default="install"
-    )
+    choice = Prompt.ask(message("tui.update.action"), choices=choices, default="install")
     if choice == "3d":
-        Installation.set(
-            "update_remind_after", (datetime.now(UTC) + timedelta(days=3)).isoformat()
-        )
+        Installation.set("update_remind_after", (datetime.now(UTC) + timedelta(days=3)).isoformat())
         return "skip"
     if choice == "ignore":
         Installation.set("ignored_update_sha", status.target_sha)
         return "skip"
     if choice == "rollback" and status.rollback_sha:
-        return (
-            "rollback"
-            if _confirm_target(console, status, status.rollback_sha)
-            else "skip"
-        )
+        return "rollback" if _confirm_target(console, status, status.rollback_sha) else "skip"
     if choice == "install":
         return "install" if _confirm_target(console, status, status.target_sha) else "skip"
     return "skip"
@@ -409,16 +372,11 @@ def _stage_revision(root: Path, revision: str) -> None:
             encoding="utf-8",
             errors="replace",
             timeout=120,
+            check=False,
         )
         if result.returncode != 0:
-            detail = (
-                result.stderr
-                or result.stdout
-                or message("tui.update.compile_failed")
-            ).strip()
-            raise UpdateError(
-                message("tui.update.stage_compile_failed", detail=detail[-500:])
-            )
+            detail = (result.stderr or result.stdout or message("tui.update.compile_failed")).strip()
+            raise UpdateError(message("tui.update.stage_compile_failed", detail=detail[-500:]))
     except subprocess.TimeoutExpired as exc:
         raise UpdateError(message("tui.update.stage_timeout")) from exc
     finally:
@@ -454,9 +412,7 @@ def _revalidate(status: UpdateStatus, target: str, *, origin_target: bool) -> No
         revisions.add(status.head_sha)
     conflicts = _path_conflicts(status.root, revisions)
     if conflicts:
-        raise UpdateError(
-            message("tui.update.new_conflict", paths=", ".join(conflicts))
-        )
+        raise UpdateError(message("tui.update.new_conflict", paths=", ".join(conflicts)))
 
 
 def _prepare_main(status: UpdateStatus) -> None:
@@ -486,9 +442,7 @@ def install_update(project_root: Path, status: UpdateStatus) -> tuple[bool, str]
         )
         _prepare_main(status)
         if conflicts := _path_conflicts(status.root, {target}):
-            raise UpdateError(
-                message("tui.update.preserve_path", paths=", ".join(conflicts))
-            )
+            raise UpdateError(message("tui.update.preserve_path", paths=", ".join(conflicts)))
         _git(status.root, "reset", "--hard", "origin/main", timeout=60)
         if _revision(status.root, "HEAD") != target:
             raise UpdateError(message("tui.update.target_failed"))

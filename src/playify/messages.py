@@ -346,11 +346,7 @@ MESSAGES: dict[str, str] = {
 
 
 def _required_fields(template: str) -> set[str]:
-    return {
-        name.split(".", 1)[0].split("[", 1)[0]
-        for _, name, _, _ in Formatter().parse(template)
-        if name
-    }
+    return {name.split(".", 1)[0].split("[", 1)[0] for _, name, _, _ in Formatter().parse(template) if name}
 
 
 def message(key: str, **fields: Any) -> str:

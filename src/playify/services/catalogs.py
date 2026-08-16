@@ -10,8 +10,9 @@ import os
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import parse_qs, quote, urlsplit
 
 from ..config import Config
@@ -103,9 +104,7 @@ class CatalogRouter:
 
     def supports(self, url: str) -> bool:
         host = _host(url)
-        return host in (
-            SPOTIFY_HOSTS | DEEZER_HOSTS | APPLE_HOSTS | TIDAL_HOSTS | AMAZON_DOMAINS
-        )
+        return host in (SPOTIFY_HOSTS | DEEZER_HOSTS | APPLE_HOSTS | TIDAL_HOSTS | AMAZON_DOMAINS)
 
     async def resolve(self, url: str) -> CatalogResult:
         host = _host(url)
@@ -138,12 +137,10 @@ class CatalogRouter:
         client_secret = os.getenv("SPOTIFY_CLIENT_SECRET", "").strip()
         if client_id and client_secret:
             try:
-                items = await asyncio.to_thread(
-                    self._spotify_official, clean_url, client_id, client_secret
-                )
+                items = await asyncio.to_thread(self._spotify_official, clean_url, client_id, client_secret)
                 if items:
                     return CatalogResult(items)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - any official-client failure should fall back to scraping
                 LOGGER.warning("Spotify API failed; trying HTTP scraper: %s", exc)
         try:
             fallback = await asyncio.to_thread(self._spotify_fallback, clean_url)
@@ -156,16 +153,12 @@ class CatalogRouter:
         raise CatalogError("Spotify returned no tracks")
 
     @staticmethod
-    def _spotify_official(
-        url: str, client_id: str, client_secret: str
-    ) -> list[CatalogItem]:
+    def _spotify_official(url: str, client_id: str, client_secret: str) -> list[CatalogItem]:
         import spotipy
         from spotipy.oauth2 import SpotifyClientCredentials
 
         client = spotipy.Spotify(
-            auth_manager=SpotifyClientCredentials(
-                client_id=client_id, client_secret=client_secret
-            ),
+            auth_manager=SpotifyClientCredentials(client_id=client_id, client_secret=client_secret),
             requests_timeout=30,
             retries=3,
         )
@@ -179,9 +172,7 @@ class CatalogRouter:
 
         def append(track: dict[str, Any] | None) -> None:
             if track:
-                result.append(
-                    CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify")
-                )
+                result.append(CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify"))
 
         if kind == "track":
             append(client.track(identifier))
@@ -239,9 +230,7 @@ class CatalogRouter:
         for entry in tracks:
             track = entry.get("track", entry) if isinstance(entry, dict) else None
             if isinstance(track, dict):
-                result.append(
-                    CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify")
-                )
+                result.append(CatalogItem(_clean(track.get("name"), UNKNOWN_TITLE), _artist(track), "spotify"))
         return result
 
     async def _paged_json(
@@ -291,9 +280,7 @@ class CatalogRouter:
             track = await self.http.get_json(f"{api}/track/{quote(identifier)}")
             if not isinstance(track, dict) or track.get("error"):
                 raise CatalogError("Deezer track was not found")
-            return CatalogResult(
-                [CatalogItem(_clean(track.get("title"), UNKNOWN_TITLE), _artist(track), "deezer")]
-            )
+            return CatalogResult([CatalogItem(_clean(track.get("title"), UNKNOWN_TITLE), _artist(track), "deezer")])
         if kind == "playlist":
             return await self._paged_json(f"{api}/playlist/{quote(identifier)}/tracks", consume)
         if kind == "album":
@@ -321,9 +308,7 @@ class CatalogRouter:
                 artist = value.get("artistName")
                 descriptor = value.get("contentDescriptor", {})
                 identifier = (
-                    descriptor.get("identifiers", {}).get("storeAdamID")
-                    if isinstance(descriptor, dict)
-                    else None
+                    descriptor.get("identifiers", {}).get("storeAdamID") if isinstance(descriptor, dict) else None
                 )
                 if title and artist and (target is None or str(identifier) == str(target)):
                     found.append(CatalogItem(_clean(title, UNKNOWN_TITLE), _clean(artist, UNKNOWN_ARTIST), "apple"))
@@ -465,7 +450,7 @@ class CatalogRouter:
                 if title and artist:
                     items.append(
                         CatalogItem(
-                            re.sub(r"\s*\[Explicit\]\s*", "", _clean(title, UNKNOWN_TITLE), flags=re.I),
+                            re.sub(r"\s*\[Explicit\]\s*", "", _clean(title, UNKNOWN_TITLE), flags=re.IGNORECASE),
                             _clean(artist, UNKNOWN_ARTIST),
                             "amazon",
                         )

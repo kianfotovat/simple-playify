@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from src.playify.config import Installation
 from src.playify.constants import BIN_DIR, HTTP_USER_AGENT
@@ -30,9 +30,7 @@ def ffmpeg_name() -> str:
 
 def functional_ffmpeg(path: str | Path) -> bool:
     try:
-        result = subprocess.run(
-            [str(path), "-version"], capture_output=True, timeout=10, text=True
-        )
+        result = subprocess.run([str(path), "-version"], capture_output=True, timeout=10, text=True, check=False)
         return result.returncode == 0 and "ffmpeg version" in result.stdout.lower()
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return False
@@ -71,9 +69,7 @@ def _release_asset() -> tuple[str, str, str]:
     release = json.loads(_request(API))
     suffix = "win64-gpl.zip" if os.name == "nt" else "linux64-gpl.tar.xz"
     assets = release.get("assets", [])
-    archive = next(
-        (asset for asset in assets if str(asset.get("name", "")).endswith(suffix)), None
-    )
+    archive = next((asset for asset in assets if str(asset.get("name", "")).endswith(suffix)), None)
     if archive is None:
         raise RuntimeError(message("tui.maintenance.archive_missing"))
     digest = str(archive.get("digest") or "")
@@ -81,11 +77,7 @@ def _release_asset() -> tuple[str, str, str]:
         expected = digest.split(":", 1)[1]
     else:
         checksum = next(
-            (
-                asset
-                for asset in assets
-                if asset.get("name") in {archive["name"] + ".sha256", "checksums.sha256"}
-            ),
+            (asset for asset in assets if asset.get("name") in {archive["name"] + ".sha256", "checksums.sha256"}),
             None,
         )
         if checksum is None:
@@ -141,7 +133,7 @@ def install_ffmpeg(console: Console) -> bool:
         Installation.set("last_ffmpeg_check", datetime.now(UTC).isoformat())
         console.print(message("tui.maintenance.installed"))
         return True
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - interactive maintenance reports all operational failures
         console.print(message("tui.maintenance.install_failed", error=exc))
         return False
 

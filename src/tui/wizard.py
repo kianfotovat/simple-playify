@@ -23,11 +23,7 @@ from src.playify.messages import message
 def load_env(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
-    return {
-        str(key): str(value)
-        for key, value in dotenv_values(path).items()
-        if key is not None and value is not None
-    }
+    return {str(key): str(value) for key, value in dotenv_values(path).items() if key is not None and value is not None}
 
 
 def save_env(path: Path, updates: dict[str, str]) -> None:
@@ -111,15 +107,12 @@ def invite_url(application_id: str, *, stage_moderation: bool) -> str:
     permissions.speak = True
     permissions.use_application_commands = True
     permissions.mute_members = stage_moderation
-    return (
-        "https://discord.com/oauth2/authorize?"
-        + urllib.parse.urlencode(
-            {
-                "client_id": application_id,
-                "scope": "bot applications.commands",
-                "permissions": permissions.value,
-            }
-        )
+    return "https://discord.com/oauth2/authorize?" + urllib.parse.urlencode(
+        {
+            "client_id": application_id,
+            "scope": "bot applications.commands",
+            "permissions": permissions.value,
+        }
     )
 
 
@@ -143,9 +136,7 @@ def run_wizard(console: Console, project_root: Path) -> bool:
     if status == "invalid":
         console.print(message("tui.wizard.discord_rejected"))
         return False
-    if status == "network" and not Confirm.ask(
-        message("tui.wizard.discord_unverified"), default=False
-    ):
+    if status == "network" and not Confirm.ask(message("tui.wizard.discord_unverified"), default=False):
         return False
 
     spotify_id = Prompt.ask(
@@ -172,9 +163,7 @@ def run_wizard(console: Console, project_root: Path) -> bool:
         if spotify_status == "invalid":
             console.print(message("tui.wizard.spotify_rejected"))
             return False
-        if spotify_status == "network" and not Confirm.ask(
-            message("tui.wizard.spotify_unverified"), default=False
-        ):
+        if spotify_status == "network" and not Confirm.ask(message("tui.wizard.spotify_unverified"), default=False):
             return False
 
     save_env(
