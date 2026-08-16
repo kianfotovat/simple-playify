@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from ..config import Config
 from ..messages import message
-from .http_client import BROWSER_USER_AGENT, HttpClient
+from .http_client import HttpClient
 
 LOGGER = logging.getLogger(__name__)
 UNKNOWN_ARTIST = message("track.unknown_artist")
@@ -410,7 +410,7 @@ class CatalogRouter:
             "x-amzn-device-model": "WEBPLAYER",
             "x-amzn-device-family": "WebPlayer",
             "x-amzn-device-id": config.get("deviceId", ""),
-            "x-amzn-user-agent": BROWSER_USER_AGENT,
+            "x-amzn-user-agent": self.http.browser_user_agent,
             "x-amzn-session-id": config.get("sessionId", ""),
             "x-amzn-request-id": str(uuid.uuid4()),
             "x-amzn-device-language": locale,

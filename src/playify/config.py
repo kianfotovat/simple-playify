@@ -43,6 +43,7 @@ DEFAULT_INSTALLATION: dict[str, Any] = {
     "previous_update_sha": None,
     "last_update_sha": None,
     "pending_environment": None,
+    "last_chrome_major": 151,
 }
 
 
