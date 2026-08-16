@@ -268,7 +268,7 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
                 Panel(
                     text,
                     title=Text(f" {message('tui.dashboard.logs.full')} ", style="brand"),
-                    subtitle=footer,
+                    subtitle=Text(footer, style="dash.muted"),
                     border_style="dash.border",
                 ),
                 refresh=True,
