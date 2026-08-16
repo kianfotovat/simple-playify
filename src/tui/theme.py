@@ -112,4 +112,4 @@ ICON_WARN = "/!\\"
 ICON_GEAR = "#"
 ICON_ROCKET = ">>"
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"

@@ -78,7 +78,7 @@ body:
     attributes:
       label: Playify version
       description: Copy the complete version shown by /status or the TUI, including the short Git revision.
-      placeholder: 2.1.0 (abc1234)
+      placeholder: 2.2.0 (abc1234)
     validations:
       required: true
 

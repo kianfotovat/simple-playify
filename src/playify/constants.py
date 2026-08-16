@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 NAME = "Playify"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 FORK_REPOSITORY = "kianfotovat/simple-playify"
 FORK_URL = f"https://github.com/{FORK_REPOSITORY}"
 ISSUES_URL = f"{FORK_URL}/issues"

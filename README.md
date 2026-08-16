@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/5c1d5fba-3a34-4ffe-bd46-ef68e1175360" alt="Playify banner" width="900">
+  <img src="https://github.com/kianfotovat/simple-playify/releases/download/readme-assets/banner.png" alt="Playify banner" width="900">
 </p>
 
 # Playify
@@ -9,7 +9,7 @@ Playify is a self-hosted Discord music bot for small servers. Give it a song nam
 You run Playify on your own Windows or Linux computer. There is no public Playify bot to invite.
 
 <p align="center">
-  <img src="assets/dashboard_preview.svg" alt="Playify dashboard" width="900">
+  <img src="https://github.com/kianfotovat/simple-playify/releases/download/readme-assets/dashboard_preview.svg" alt="Playify dashboard" width="900">
 </p>
 
 ## Features
