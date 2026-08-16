@@ -29,11 +29,11 @@ from .wizard import load_env, run_wizard
 
 def _console() -> Console:
     mode = Config.get("color_mode", "auto")
-    color_system = "standard" if mode == "ansi" else "truecolor" if mode == "v2" else None
+    color_system = {"ansi": "standard", "v2": "truecolor", "none": None}.get(mode, "auto")
     return Console(
         theme=PLAYIFY_THEME,
         highlight=False,
-        no_color=mode == "none",
+        no_color=True if mode == "none" else None,
         color_system=color_system,
         safe_box=Config.get("symbol_mode", "auto") == "ascii",
         force_terminal=False if mode == "none" else None,

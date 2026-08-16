@@ -34,19 +34,39 @@ def refresh_rate() -> int:
 def _metrics(bot: BotProcess) -> Panel:
     memory, ffmpeg = bot.process_metrics()
     values = [
-        (message("tui.dashboard.metric.uptime"), bot.uptime),
-        (message("tui.dashboard.metric.memory"), f"{memory:.1f} MB"),
-        (message("tui.dashboard.metric.servers"), str(bot.metrics.get("servers", 0))),
-        (message("tui.dashboard.metric.players"), str(bot.metrics.get("players", 0))),
-        (message("tui.dashboard.metric.queued"), str(bot.metrics.get("queued", 0))),
-        (message("tui.dashboard.metric.ffmpeg"), str(ffmpeg)),
-        (message("tui.dashboard.metric.cache"), str(bot.metrics.get("cache", 0))),
-        (message("tui.dashboard.metric.crashes"), str(bot.crash_count)),
+        (message("tui.dashboard.metric.uptime"), bot.uptime, "accent"),
+        (message("tui.dashboard.metric.memory"), f"{memory:.1f} MB", "info"),
+        (message("tui.dashboard.metric.servers"), str(bot.metrics.get("servers", 0)), "value"),
+        (
+            message("tui.dashboard.metric.players"),
+            str(bot.metrics.get("players", 0)),
+            "success" if bot.metrics.get("players", 0) else "muted",
+        ),
+        (
+            message("tui.dashboard.metric.queued"),
+            str(bot.metrics.get("queued", 0)),
+            "warning" if bot.metrics.get("queued", 0) else "muted",
+        ),
+        (message("tui.dashboard.metric.ffmpeg"), str(ffmpeg), "success" if ffmpeg else "muted"),
+        (message("tui.dashboard.metric.cache"), str(bot.metrics.get("cache", 0)), "subtitle"),
+        (
+            message("tui.dashboard.metric.crashes"),
+            str(bot.crash_count),
+            "error" if bot.crash_count else "success",
+        ),
     ]
-    cards = [Panel(f"[bold]{value}[/]", title=label, width=15) for label, value in values]
+    cards = [
+        Panel(
+            Text(value, style=style),
+            title=Text(label, style="muted"),
+            border_style="border",
+            width=15,
+        )
+        for label, value, style in values
+    ]
     return Panel(
         Columns(cards, equal=True, expand=True),
-        title=message("tui.dashboard.runtime"),
+        title=Text(message("tui.dashboard.runtime"), style="header"),
         border_style="blue",
     )
 
@@ -54,30 +74,56 @@ def _metrics(bot: BotProcess) -> Panel:
 def _now_playing(bot: BotProcess) -> Panel:
     player = bot.now_playing()
     if not player:
-        content = message("tui.dashboard.no_track")
+        content = Text(message("tui.dashboard.no_track"), style="muted")
     else:
-        state = message("tui.dashboard.state.active" if player.get("active") else "tui.dashboard.state.dormant")
-        content = message(
-            "tui.dashboard.track",
-            track=player.get("track") or message("tui.dashboard.unknown_track"),
-            state=state,
-            guild=player.get("guild_id"),
-            queued=player.get("queued", 0),
-            pending=player.get("pending", 0),
-        )
-    return Panel(content, title=message("controller.title.playing"), border_style="cyan")
+        active = bool(player.get("active"))
+        state = message("tui.dashboard.state.active" if active else "tui.dashboard.state.dormant")
+        separator = " | " if Config.get("symbol_mode", "auto") == "ascii" else " • "
+        content = Text()
+        content.append(str(player.get("track") or message("tui.dashboard.unknown_track")), style="music.title")
+        content.append("  [", style="muted")
+        content.append(state, style="status.online" if active else "warning")
+        content.append("]\n", style="muted")
+        content.append(message("tui.dashboard.detail.guild") + " ", style="muted")
+        content.append(str(player.get("guild_id")), style="value")
+        content.append(separator, style="muted")
+        content.append(str(player.get("queued", 0)), style="accent")
+        content.append(" " + message("tui.dashboard.detail.queued"), style="muted")
+        content.append(separator, style="muted")
+        content.append(str(player.get("pending", 0)), style="accent")
+        content.append(" " + message("tui.dashboard.detail.pending"), style="muted")
+    return Panel(
+        content,
+        title=Text(message("controller.title.playing"), style="header"),
+        border_style="cyan",
+    )
+
+
+def _log_text(lines: list[str]) -> Text:
+    text = Text()
+    for index, line in enumerate(lines):
+        upper = line.upper()
+        if "ERROR" in upper or "CRITICAL" in upper:
+            style = "log.error"
+        elif "WARNING" in upper:
+            style = "log.warning"
+        elif "DEBUG" in upper:
+            style = "log.debug"
+        elif "INFO" in upper:
+            style = "log.info"
+        else:
+            style = "value"
+        text.append(line, style=style)
+        if index < len(lines) - 1:
+            text.append("\n")
+    return text
 
 
 def _logs(bot: BotProcess, height: int) -> Panel:
     lines = bot.recent_logs(max(3, height))
-    text = Text()
-    for line in lines:
-        style = "red" if "ERROR" in line or "CRITICAL" in line else "yellow" if "WARNING" in line else "white"
-        text.append(line, style=style)
-        text.append("\n")
     return Panel(
-        text,
-        title=message("tui.dashboard.logs.recent"),
+        _log_text(lines),
+        title=Text(message("tui.dashboard.logs.recent"), style="header"),
         border_style="bright_black",
         height=height + 2,
     )
@@ -89,21 +135,23 @@ def _dashboard(bot: BotProcess, width: int, height: int):
     size = f"{width}x{height}" if ascii_symbols else f"{width}×{height}"
     if width < 100 or height < 30:
         return Panel(
-            message(
-                "tui.dashboard.resize",
-                minimum="100x30" if ascii_symbols else "100×30",
-                size=size,
+            Text(
+                message(
+                    "tui.dashboard.resize",
+                    minimum="100x30" if ascii_symbols else "100×30",
+                    size=size,
+                ),
+                style="warning",
             ),
-            title="Playify",
+            title=Text("Playify", style="title"),
             border_style="yellow",
         )
-    status = message(
-        "tui.dashboard.status.online"
-        if bot.is_online
-        else "tui.dashboard.status.starting"
-        if bot.is_running
-        else "tui.dashboard.status.offline"
-    )
+    if bot.is_online:
+        status = f"[status.online]{message('tui.dashboard.status.online')}[/]"
+    elif bot.is_running:
+        status = f"[status.starting]{message('tui.dashboard.status.starting')}[/]"
+    else:
+        status = f"[status.offline]{message('tui.dashboard.status.offline')}[/]"
     restart = bot.metrics.get("restart_required")
     badge = separator + message("tui.dashboard.restart_badge", scope=restart) if restart else ""
     header = Panel(
@@ -125,8 +173,8 @@ def _dashboard(bot: BotProcess, width: int, height: int):
     if not bot.is_running:
         items.append(
             Panel(
-                message("tui.dashboard.bot_exited", code=bot.last_exit_code),
-                title=message("tui.dashboard.bot_offline"),
+                Text(message("tui.dashboard.bot_exited", code=bot.last_exit_code), style="error"),
+                title=Text(message("tui.dashboard.bot_offline"), style="error"),
                 border_style="red",
             )
         )
@@ -146,7 +194,9 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
             if following:
                 offset = max(0, len(lines) - page)
             visible = lines[offset : offset + page]
-            text = Text("\n".join(visible), overflow="fold", no_wrap=False)
+            text = _log_text(visible)
+            text.overflow = "fold"
+            text.no_wrap = False
             footer = message(
                 "tui.dashboard.logs.footer",
                 state=message("tui.dashboard.logs.following" if following else "tui.dashboard.logs.paused"),
@@ -157,8 +207,9 @@ def _full_logs(console: Console, bot: BotProcess) -> None:
             live.update(
                 Panel(
                     text,
-                    title=message("tui.dashboard.logs.full"),
+                    title=Text(message("tui.dashboard.logs.full"), style="header"),
                     subtitle=footer,
+                    border_style="blue",
                 ),
                 refresh=True,
             )

@@ -44,6 +44,7 @@ PLAYIFY_THEME = Theme(
         "prompt": Style(color=BLUE_ICE, bold=True),
         "input": Style(color=WHITE, bold=True),
         "status.online": Style(color=GREEN, bold=True),
+        "status.starting": Style(color=YELLOW, bold=True),
         "status.offline": Style(color=RED),
         "music.title": Style(color=WHITE, bold=True),
         "music.artist": Style(color=BLUE_ICE),
